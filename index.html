@@ -1,0 +1,1297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<title>Cameo Cutter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#eef1f4">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one phone column — a cutting mat as the hero, settings below, Cut docked to the bottom edge */
+:root {
+  --bg: #eef1f4;        /* cool workshop paper */
+  --surface: #ffffff;
+  --ink: #141a22;
+  --muted: #5d6877;
+  --line: #d3d9e1;
+  --grid: #c3ccd7;
+  --cut: #e0245e;       /* cut-line red */
+  --cut-ink: #ffffff;
+  --ok: #1d8a5b;
+  --warn: #b25b00;
+  --bad: #c62828;
+  --display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1318; --surface: #171c23; --ink: #e8edf3; --muted: #93a0b0; --line: #2a323d;
+    --grid: #303a46; --cut: #ff4f7f; --cut-ink: #1a0710; --ok: #3fbf86; --warn: #e39a3b; --bad: #ff6b6b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1318; --surface: #171c23; --ink: #e8edf3; --muted: #93a0b0; --line: #2a323d;
+  --grid: #303a46; --cut: #ff4f7f; --cut-ink: #1a0710; --ok: #3fbf86; --warn: #e39a3b; --bad: #ff6b6b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 560px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 140px; }
+
+header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); display: flex; align-items: center; gap: 12px; padding-block: 14px 12px; border-bottom: 1px solid var(--line); }
+.brand { font: 700 24px/1 var(--display); letter-spacing: .02em; text-transform: uppercase; }
+.conn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.conn span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: none; }
+.dot.on { background: var(--ok); }
+.dot.busy { background: var(--warn); }
+
+button { font: 600 14px/1 var(--body); color: var(--ink); background: transparent; border: 1.5px solid var(--ink); border-radius: 4px; padding: 11px 14px; cursor: pointer; }
+button:disabled { opacity: .4; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible, .tab:focus-visible { outline: 2px solid var(--cut); outline-offset: 2px; }
+button.primary { background: var(--cut); border-color: var(--cut); color: var(--cut-ink); }
+
+.tabs { display: flex; gap: 18px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line); }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex: none; border: 0; border-radius: 0; padding: 10px 0 9px; font: 500 15px/1 var(--body); color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--cut); }
+
+section { padding-block: 22px 4px; display: grid; gap: 14px; }
+h2 { margin: 0; font: 600 13px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+
+.connect-row { display: grid; gap: 12px; padding-block: 16px 0; }
+.connect-row .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+.note.bad { color: var(--bad); }
+
+/* the mat */
+.mat { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 22px 8px 8px 22px; }
+.mat svg { display: block; width: 100%; height: auto; max-width: 100%; overflow: visible; }
+.mat .ruler { font: 500 9px var(--mono); fill: var(--muted); }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 13px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.meta b { color: var(--ink); font-weight: 500; }
+.warns { display: grid; gap: 4px; }
+.warns p { margin: 0; font-size: 13px; color: var(--warn); }
+
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field label { font-size: 12px; color: var(--muted); }
+.field .val { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+.field input, .field select { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 500 16px var(--mono); padding: 10px; font-variant-numeric: tabular-nums; }
+.field .unit { align-self: center; padding-right: 10px; font: 12px var(--mono); color: var(--muted); }
+.step { border: 0; border-left: 1px solid var(--line); border-radius: 0; padding: 0 12px; font: 500 18px var(--mono); }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+.actions { display: flex; gap: 12px; flex-wrap: wrap; }
+input[type=file] { display: none; }
+
+details { border-top: 1px solid var(--line); padding-block: 14px; margin-top: 18px; }
+summary { cursor: pointer; font: 600 13px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+
+/* docked cut bar */
+.dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--line);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+.dock .inner { max-width: 560px; margin: 0 auto; display: grid; gap: 10px; }
+.dock .row { display: flex; gap: 12px; align-items: center; }
+.dock .msg { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); }
+.dock .msg.bad { color: var(--bad); }
+.dock .msg.good { color: var(--ok); }
+.dock button.primary { min-width: 120px; padding: 14px 22px; font-size: 16px; }
+.bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--cut); transition: width .2s; }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">Cutter</div>
+    <div class="conn"><span class="dot" id="dot"></span><span id="connText">Not connected</span></div>
+    <button id="connectBtn" type="button">Connect</button>
+  </header>
+
+  <div class="connect-row" id="connectRow">
+    <div class="tabs" role="tablist" aria-label="Connect by">
+      <button class="tab" role="tab" id="viaBle" aria-selected="true" type="button">Bluetooth</button>
+      <button class="tab" role="tab" id="viaUsb" aria-selected="false" type="button">USB cable</button>
+    </div>
+    <p class="note" id="connNote">Turn the Cameo on and close Silhouette Studio or Silhouette Go on any device, then tap Connect.</p>
+  </div>
+
+  <section aria-labelledby="hMat">
+    <h2 id="hMat">On the mat</h2>
+    <div class="mat"><svg id="matSvg" viewBox="0 0 304.8 304.8" role="img" aria-label="Cutting mat preview"></svg></div>
+    <div class="meta" id="meta"></div>
+    <div class="warns" id="warns"></div>
+    <div class="actions">
+      <button type="button" id="openBtn">Open SVG</button>
+      <button type="button" id="testBtn">Test square</button>
+      <input type="file" id="file" accept=".svg,image/svg+xml">
+    </div>
+    <div class="fields">
+      <div class="field"><label for="posX">From left edge</label>
+        <div class="val"><input id="posX" type="number" inputmode="decimal" step="1" min="0"><span class="unit">mm</span></div></div>
+      <div class="field"><label for="posY">From top edge</label>
+        <div class="val"><input id="posY" type="number" inputmode="decimal" step="1" min="0"><span class="unit">mm</span></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="hMaterial">
+    <h2 id="hMaterial">Material</h2>
+    <div class="tabs" role="tablist" aria-label="Material" id="presetTabs"></div>
+    <div class="fields">
+      <div class="field"><label for="tool">Tool</label>
+        <div class="val"><select id="tool"><option value="autoblade">AutoBlade</option><option value="blade">Ratchet blade</option><option value="pen">Pen</option></select></div></div>
+      <div class="field"><label for="holder">Holder</label>
+        <div class="val"><select id="holder"><option value="1">Left (1)</option><option value="2">Right (2)</option></select></div></div>
+      <div class="field" id="depthField"><label for="depth">Blade depth</label>
+        <div class="val"><input id="depth" type="number" inputmode="numeric" min="0" max="10"><button class="step" type="button" data-step="depth,-1" aria-label="Less depth">−</button><button class="step" type="button" data-step="depth,1" aria-label="More depth">+</button></div></div>
+      <div class="field"><label for="force">Force</label>
+        <div class="val"><input id="force" type="number" inputmode="numeric" min="1" max="33"><button class="step" type="button" data-step="force,-1" aria-label="Less force">−</button><button class="step" type="button" data-step="force,1" aria-label="More force">+</button></div></div>
+      <div class="field"><label for="speed">Speed</label>
+        <div class="val"><input id="speed" type="number" inputmode="numeric" min="1" max="30"><button class="step" type="button" data-step="speed,-1" aria-label="Slower">−</button><button class="step" type="button" data-step="speed,1" aria-label="Faster">+</button></div></div>
+      <div class="field"><label for="passes">Passes</label>
+        <div class="val"><input id="passes" type="number" inputmode="numeric" min="1" max="5"><button class="step" type="button" data-step="passes,-1" aria-label="Fewer passes">−</button><button class="step" type="button" data-step="passes,1" aria-label="More passes">+</button></div></div>
+      <div class="field"><label for="mat">Mat</label>
+        <div class="val"><select id="mat"><option value="cameo_12x12">12 × 12 in</option><option value="cameo_12x24">12 × 24 in</option><option value="no_mat">No mat (roll)</option></select></div></div>
+    </div>
+    <p class="hint">These are starting points. Changes save to this material on this phone.</p>
+  </section>
+
+  <details>
+    <summary>Details</summary>
+    <pre class="log" id="log"></pre>
+  </details>
+</div>
+
+<div class="dock">
+  <div class="inner">
+    <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
+    <div class="row">
+      <div class="msg" id="dockMsg">Load a design to start</div>
+      <button class="primary" type="button" id="cutBtn" disabled>Cut</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+// Cameo Cutter core — pure logic, no UI.
+// Protocol port of fablabnbg/inkscape-silhouette (GPLv2), Cameo 4/5 family path.
+// Units: everything in mm until command generation; 1 mm = 20 SU.
+
+const ETX = 0x03;
+const ESC = 0x1b;
+
+// ---------------------------------------------------------------- hardware
+
+const BLE = {
+  SERVICE: 'e2088282-4fde-42f9-bb22-6ec3c7ed8f91',
+  WRITE: '6d92661d-f429-4d67-929b-28e7a9780912',
+  READ: '8dcf199a-30e7-4bd4-beb6-beb57dca866c',
+  CONTROL: '61490654-b5b4-458c-a867-9e15bc1471e0',
+  INIT: [0x1b, 0x04],
+  CHUNK: 20,
+};
+
+const USB = { WRITE_EP: 1, READ_EP: 2, VENDORS: [0x0b4d, 0x3844] };
+
+// All of these are in the Python driver's PRODUCT_LINE_CAMEO4 (same command set).
+const HW = {
+  cameo4:          { name: 'Cameo 4',            width: 304.8, twoTools: true },
+  cameo4plus:      { name: 'Cameo 4 Plus',       width: 372,   twoTools: true },
+  cameo4pro:       { name: 'Cameo 4 Pro',        width: 600,   twoTools: true },
+  cameo5:          { name: 'Cameo 5',            width: 330.2, twoTools: true },
+  cameo5plus:      { name: 'Cameo 5 Plus',       width: 372,   twoTools: true },
+  cameoProMk2:     { name: 'Cameo Pro MK II',    width: 609,   twoTools: true },
+  cameo5alpha:     { name: 'Cameo 5 Alpha',      width: 330.2, twoTools: true, maxPressure: 40 },
+  cameo5alphaplus: { name: 'Cameo 5 Alpha Plus', width: 372,   twoTools: true, maxPressure: 40 },
+};
+const HARDWARE = HW;
+
+const USB_IDS = {
+  '0b4d:1137': 'cameo4', '0b4d:1138': 'cameo4plus', '0b4d:1139': 'cameo4pro',
+  '0b4d:1140': 'cameo5', '0b4d:1141': 'cameo5plus', '0b4d:1146': 'cameoProMk2',
+  '3844:0001': 'cameo5alpha', '3844:0002': 'cameo5alphaplus',
+};
+
+// Order matters: most specific first.
+const NAMES = [
+  ['CAMEO 5 ALPHA PLUS', 'cameo5alphaplus'], ['CAMEO 5 ALPHA', 'cameo5alpha'],
+  ['CAMEO 5 PLUS', 'cameo5plus'], ['CAMEO 5', 'cameo5'],
+  ['CAMEO PRO MARK2', 'cameoProMk2'], ['CAMEO 4 PLUS', 'cameo4plus'],
+  ['CAMEO 4 PRO', 'cameo4pro'], ['CAMEO 4', 'cameo4'],
+];
+
+const hex4 = (n) => n.toString(16).padStart(4, '0');
+function hardwareFromUsb(vendorId, productId) {
+  const key = USB_IDS[`${hex4(vendorId)}:${hex4(productId)}`];
+  return key ? { key, ...HW[key] } : null;
+}
+function hardwareFromName(s) {
+  if (!s) return null;
+  const n = s.trim().toUpperCase();
+  for (const [name, key] of NAMES) if (n.startsWith(name) || n.includes(name)) return { key, ...HW[key] };
+  return null;
+}
+
+// ---------------------------------------------------------------- commands
+
+// Python's round() is round-half-to-even; match it so output is identical.
+const pyRound = (v) => {
+  const f = Math.floor(v), d = v - f;
+  if (d === 0.5) return f % 2 === 0 ? f : f + 1;
+  return Math.round(v) + 0; // + 0 turns -0 into 0
+};
+const su = (mm) => pyRound(mm * 20);
+const inSU = (inch) => pyRound(inch * 508);
+const M = (y, x) => `M${su(y)},${su(x)}`;
+const D = (y, x) => `D${su(y)},${su(x)}`;
+
+const MATS = {
+  cameo_12x12: { code: '1', w: 12, h: 12, label: '12 × 12 mat' },
+  cameo_12x24: { code: '2', w: 12, h: 24, label: '12 × 24 mat' },
+  cameo_plus_15x15: { code: '8', w: 15, h: 15, label: '15 × 15 mat' },
+  no_mat: { code: '0', w: 0, h: 0, label: 'No mat (roll)' },
+};
+
+/**
+ * Setup commands for the Cameo 4/5 family, mirroring Graphtec.setup().
+ * opts: { mat, pressure, speed, depth, tool: 'autoblade'|'blade'|'pen',
+ *         toolholder, bladeDiameter, sharpenCorners, sharpenStart, sharpenEnd }
+ * currentTool: number from the ESC NAK query for this holder, or null.
+ */
+function setupCommands(hw, opts, currentTool = null) {
+  const o = {
+    mat: 'cameo_12x12', toolholder: 1, bladeDiameter: 0.9, sharpenCorners: false,
+    sharpenStart: 0.1, sharpenEnd: 0.1, tool: 'autoblade', ...opts,
+  };
+  const th = o.toolholder;
+  const pen = o.tool === 'pen';
+  const cmds = [];
+
+  // set_cutting_mat
+  const mat = MATS[o.mat] || MATS.cameo_12x12;
+  cmds.push('TG' + mat.code);
+  cmds.push('FN0', 'TB50,0');
+  if (mat.w) cmds.push('\\0,0', `Z${inSU(mat.h)},${inSU(mat.w)}`);
+  else cmds.push('\\0,0', `Z${su(3000)},${su(hw.width)}`);
+
+  // tool select
+  if (hw.twoTools) cmds.push(`J${th}`);
+
+  let pressure = o.pressure;
+  const maxP = hw.maxPressure || 33;
+  if (pressure > maxP) pressure = maxP;
+  cmds.push(`FX${pressure},${th}`, 'TJ0');
+
+  let speed = Math.min(30, Math.max(1, o.speed));
+  cmds.push(`!${speed},${th}`);
+  cmds.push(`FC0,1,${th}`);                       // cutter offset 0mm x 0.05mm
+  cmds.push(`FE${o.sharpenCorners ? 1 : 0},${th}`); // lift
+  if (pen) cmds.push(`FF0,0,${th}`, `FF0,0,${th}`);
+  else {
+    const s = Math.trunc((o.sharpenStart + 0.05) * 10);
+    const e = Math.trunc((o.sharpenEnd + 0.05) * 10);
+    cmds.push(`FF${s},0,${th}`, `FF${s},${e},${th}`);
+  }
+  pressure = Math.min(33, Math.max(1, pressure));
+  cmds.push(`FX${pressure},${th}`, 'TJ3');
+  cmds.push(pen ? `FC0,1,${th}` : `FC${su(o.bladeDiameter)},1,${th}`);
+
+  if (o.tool === 'autoblade' && o.depth != null) {
+    const okTool = currentTool == null || currentTool === 2 || currentTool === 0;
+    if (okTool && th === 1) cmds.push(`TF${Math.min(10, Math.max(0, o.depth))},${th}`);
+  }
+  return cmds;
+}
+
+/**
+ * Plot commands, mirroring Graphtec.plot_cmds() with software clipping.
+ * paths: [[[x,y],...],...] in mm (x across the machine, y down the feed).
+ */
+function plotCommands(hw, paths, { mediaWidth, mediaHeight, offset = [0, 0] } = {}) {
+  const width = hw.width ?? mediaWidth;            // left-aligned: hardware width
+  const clip = { llx: 0, urx: width, ury: 0, lly: mediaHeight };
+  const fuzz = 0.05;
+  const clipPt = (x, y) => {
+    let inside = true;
+    if (clip.llx - x > fuzz) { x = clip.llx; inside = false; }
+    if (x - clip.urx > fuzz) { x = clip.urx; inside = false; }
+    if (clip.ury - y > fuzz) { y = clip.ury; inside = false; }
+    if (y - clip.lly > fuzz) { y = clip.lly; inside = false; }
+    return [x, y, inside];
+  };
+  const bbox = {};
+  const ext = (x, y) => {
+    if (!('llx' in bbox) || x < bbox.llx) bbox.llx = x;
+    if (!('urx' in bbox) || x > bbox.urx) bbox.urx = x;
+    if (!('lly' in bbox) || y > bbox.lly) bbox.lly = y;
+    if (!('ury' in bbox) || y < bbox.ury) bbox.ury = y;
+  };
+  const xo = offset[0] + clip.llx, yo = offset[1] + clip.ury;
+  const cmds = [];
+  let clipped = 0;
+  for (const p of paths) {
+    if (p.length < 2) continue;
+    let x = p[0][0] + xo, y = p[0][1] + yo;
+    ext(x, y);
+    let last;
+    [x, y, last] = clipPt(x, y);
+    if (!last) clipped++;
+    cmds.push(M(y, x));
+    for (let j = 1; j < p.length; j++) {
+      x = p[j][0] + xo; y = p[j][1] + yo;
+      ext(x, y);
+      let inside;
+      [x, y, inside] = clipPt(x, y);
+      if (!inside) clipped++;
+      cmds.push(inside && last ? D(y, x) : M(y, x));
+      last = inside;
+    }
+  }
+  return { cmds, bbox, clipped };
+}
+
+function endCommands(bbox, endOffset = 0) {
+  return [M((bbox.lly || 0) + endOffset, 0), 'SO0'];
+}
+
+function encodeCommands(list) {
+  const s = list.map((c) => c + '\x03').join('');
+  return new TextEncoder().encode(s);
+}
+
+/** Split into ≤ max-byte chunks that each end on an ETX (Graphtec.safe_write). */
+function safeChunks(bytes, max = 1024) {
+  const out = [];
+  let o = 0;
+  while (o < bytes.length) {
+    const cand = bytes.subarray(o, Math.min(o + max, bytes.length));
+    let cut = cand.lastIndexOf(ETX) + 1;
+    if (cut === 0) cut = cand.length; // single command longer than max (never in practice)
+    out.push(cand.subarray(0, cut));
+    o += cut;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- SVG → paths
+
+const NS_SVG = 'http://www.w3.org/2000/svg';
+const SKIP = new Set(['defs', 'clipPath', 'mask', 'symbol', 'marker', 'pattern', 'title',
+  'desc', 'metadata', 'style', 'script', 'linearGradient', 'radialGradient', 'filter']);
+
+const I = [1, 0, 0, 1, 0, 0];
+const mul = (a, b) => [
+  a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1],
+  a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3],
+  a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5],
+];
+const ap = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+
+function parseTransform(s) {
+  let m = I;
+  if (!s) return m;
+  const re = /(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/g;
+  let t;
+  while ((t = re.exec(s))) {
+    const v = (t[2].match(/[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?/g) || []).map(Number);
+    let n;
+    switch (t[1]) {
+      case 'matrix': n = v.length === 6 ? v : I; break;
+      case 'translate': n = [1, 0, 0, 1, v[0] || 0, v[1] || 0]; break;
+      case 'scale': n = [v[0] ?? 1, 0, 0, v[1] ?? v[0] ?? 1, 0, 0]; break;
+      case 'rotate': {
+        const a = ((v[0] || 0) * Math.PI) / 180, c = Math.cos(a), s2 = Math.sin(a);
+        n = [c, s2, -s2, c, 0, 0];
+        if (v.length >= 3) n = mul(mul([1, 0, 0, 1, v[1], v[2]], n), [1, 0, 0, 1, -v[1], -v[2]]);
+        break;
+      }
+      case 'skewX': n = [1, 0, Math.tan(((v[0] || 0) * Math.PI) / 180), 1, 0, 0]; break;
+      case 'skewY': n = [1, Math.tan(((v[0] || 0) * Math.PI) / 180), 0, 1, 0, 0]; break;
+    }
+    m = mul(m, n);
+  }
+  return m;
+}
+
+function lengthToMM(str) {
+  if (str == null || str === '') return null;
+  const m = String(str).trim().match(/^([-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?)\s*([a-z%]*)$/i);
+  if (!m) return null;
+  const v = parseFloat(m[1]);
+  const u = m[2].toLowerCase();
+  const f = { '': 25.4 / 96, px: 25.4 / 96, mm: 1, cm: 10, in: 25.4, pt: 25.4 / 72, pc: 25.4 / 6, q: 0.25 }[u];
+  return f == null ? null : v * f;
+}
+
+// Tokenise path data. Arc flags may be packed without separators ("a1 1 0 00 10 10").
+function* pathTokens(d) {
+  const re = /([MmZzLlHhVvCcSsQqTtAa])|([-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?)/g;
+  let t;
+  while ((t = re.exec(d))) yield t[1] ? { cmd: t[1] } : { num: t[2], idx: t.index };
+}
+
+function parsePathData(d) {
+  // Returns list of segments in user space: {type:'M'|'L'|'C'|'Z', pts}
+  const out = [];
+  const toks = [...pathTokens(d)];
+  let i = 0, cmd = null;
+  let cx = 0, cy = 0, sx = 0, sy = 0, lc = null, lq = null;
+  const num = () => {
+    const t = toks[i];
+    if (!t || t.cmd) throw new Error('bad path');
+    i++;
+    return parseFloat(t.num);
+  };
+  // Arc flags are a single 0/1 and may be packed: "a1 1 0 0110 10" → 0,1,10,10
+  const flag = () => {
+    const t = toks[i];
+    if (!t || t.cmd) throw new Error('bad path');
+    const s = t.num;
+    if (s.length > 1 && (s[0] === '0' || s[0] === '1')) { t.num = s.slice(1); return +s[0]; }
+    i++;
+    return +s ? 1 : 0;
+  };
+  while (i < toks.length) {
+    if (toks[i].cmd) {
+      cmd = toks[i].cmd; i++;
+      if (cmd === 'Z' || cmd === 'z') {
+        out.push({ type: 'Z' });
+        cx = sx; cy = sy; lc = lq = null;
+        if (toks[i] && !toks[i].cmd) throw new Error('numbers after Z');
+        continue;
+      }
+    } else if (!cmd || cmd === 'Z' || cmd === 'z') throw new Error('path must start with a command');
+    const rel = cmd === cmd.toLowerCase();
+    const C = cmd.toUpperCase();
+    const ax = (v) => (rel ? cx + v : v), ay = (v) => (rel ? cy + v : v);
+    {
+      switch (C) {
+        case 'M': {
+          const x = ax(num()), y = ay(num());
+          out.push({ type: 'M', pts: [[x, y]] });
+          cx = sx = x; cy = sy = y; lc = lq = null;
+          cmd = rel ? 'l' : 'L'; // implicit lineto
+          break;
+        }
+        case 'L': { const x = ax(num()), y = ay(num()); out.push({ type: 'L', pts: [[x, y]] }); cx = x; cy = y; lc = lq = null; break; }
+        case 'H': { const x = rel ? cx + num() : num(); out.push({ type: 'L', pts: [[x, cy]] }); cx = x; lc = lq = null; break; }
+        case 'V': { const y = rel ? cy + num() : num(); out.push({ type: 'L', pts: [[cx, y]] }); cy = y; lc = lq = null; break; }
+        case 'C': {
+          const x1 = ax(num()), y1 = ay(num()), x2 = ax(num()), y2 = ay(num()), x = ax(num()), y = ay(num());
+          out.push({ type: 'C', pts: [[x1, y1], [x2, y2], [x, y]] }); lc = [x2, y2]; lq = null; cx = x; cy = y; break;
+        }
+        case 'S': {
+          const r1 = lc ? [2 * cx - lc[0], 2 * cy - lc[1]] : [cx, cy];
+          const x2 = ax(num()), y2 = ay(num()), x = ax(num()), y = ay(num());
+          out.push({ type: 'C', pts: [r1, [x2, y2], [x, y]] }); lc = [x2, y2]; lq = null; cx = x; cy = y; break;
+        }
+        case 'Q': {
+          const qx = ax(num()), qy = ay(num()), x = ax(num()), y = ay(num());
+          out.push({ type: 'C', pts: q2c(cx, cy, qx, qy, x, y) }); lq = [qx, qy]; lc = null; cx = x; cy = y; break;
+        }
+        case 'T': {
+          const q = lq ? [2 * cx - lq[0], 2 * cy - lq[1]] : [cx, cy];
+          const x = ax(num()), y = ay(num());
+          out.push({ type: 'C', pts: q2c(cx, cy, q[0], q[1], x, y) }); lq = q; lc = null; cx = x; cy = y; break;
+        }
+        case 'A': {
+          const rx = num(), ry = num(), rot = num(), fa = flag(), fs = flag(), x = ax(num()), y = ay(num());
+          for (const c of arcToCubics(cx, cy, rx, ry, rot, fa, fs, x, y)) out.push({ type: 'C', pts: c });
+          lc = lq = null; cx = x; cy = y; break;
+        }
+        default: throw new Error('unknown command ' + cmd);
+      }
+    }
+  }
+  return out;
+}
+
+function q2c(x0, y0, qx, qy, x, y) {
+  return [[x0 + (2 / 3) * (qx - x0), y0 + (2 / 3) * (qy - y0)], [x + (2 / 3) * (qx - x), y + (2 / 3) * (qy - y)], [x, y]];
+}
+
+function arcToCubics(x1, y1, rx, ry, phiDeg, fa, fs, x2, y2) {
+  if (x1 === x2 && y1 === y2) return [];
+  rx = Math.abs(rx); ry = Math.abs(ry);
+  if (!rx || !ry) return [[[x1, y1], [x2, y2], [x2, y2]]];
+  const phi = (phiDeg * Math.PI) / 180, cp = Math.cos(phi), sp = Math.sin(phi);
+  const dx = (x1 - x2) / 2, dy = (y1 - y2) / 2;
+  const x1p = cp * dx + sp * dy, y1p = -sp * dx + cp * dy;
+  const lam = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry);
+  if (lam > 1) { rx *= Math.sqrt(lam); ry *= Math.sqrt(lam); }
+  const num = rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p;
+  const den = rx * rx * y1p * y1p + ry * ry * x1p * x1p;
+  let co = Math.sqrt(Math.max(0, num / den));
+  if (fa === fs) co = -co;
+  const cxp = (co * rx * y1p) / ry, cyp = (-co * ry * x1p) / rx;
+  const cx = cp * cxp - sp * cyp + (x1 + x2) / 2, cy = sp * cxp + cp * cyp + (y1 + y2) / 2;
+  const ang = (ux, uy, vx, vy) => {
+    const a = Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy);
+    return a;
+  };
+  const t1 = ang(1, 0, (x1p - cxp) / rx, (y1p - cyp) / ry);
+  let dt = ang((x1p - cxp) / rx, (y1p - cyp) / ry, (-x1p - cxp) / rx, (-y1p - cyp) / ry);
+  if (!fs && dt > 0) dt -= 2 * Math.PI;
+  if (fs && dt < 0) dt += 2 * Math.PI;
+  const n = Math.max(1, Math.ceil(Math.abs(dt) / (Math.PI / 2)));
+  const step = dt / n, k = (4 / 3) * Math.tan(step / 4);
+  const pt = (t) => {
+    const x = rx * Math.cos(t), y = ry * Math.sin(t);
+    return [cp * x - sp * y + cx, sp * x + cp * y + cy];
+  };
+  const dv = (t) => {
+    const x = -rx * Math.sin(t), y = ry * Math.cos(t);
+    return [cp * x - sp * y, sp * x + cp * y];
+  };
+  const res = [];
+  for (let j = 0; j < n; j++) {
+    const a = t1 + j * step, b = a + step;
+    const p0 = pt(a), p3 = pt(b), d0 = dv(a), d3 = dv(b);
+    res.push([[p0[0] + k * d0[0], p0[1] + k * d0[1]], [p3[0] - k * d3[0], p3[1] - k * d3[1]], p3]);
+  }
+  const last = res[res.length - 1];
+  last[2] = [x2, y2];
+  return res;
+}
+
+function flattenCubic(p0, p1, p2, p3, tol, out, depth = 0) {
+  const ux = 3 * p1[0] - 2 * p0[0] - p3[0], uy = 3 * p1[1] - 2 * p0[1] - p3[1];
+  const vx = 3 * p2[0] - p0[0] - 2 * p3[0], vy = 3 * p2[1] - p0[1] - 2 * p3[1];
+  const flat = Math.max(ux * ux, vx * vx) + Math.max(uy * uy, vy * vy);
+  if (flat <= 16 * tol * tol || depth > 18) { out.push(p3); return; }
+  const m = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const p01 = m(p0, p1), p12 = m(p1, p2), p23 = m(p2, p3);
+  const p012 = m(p01, p12), p123 = m(p12, p23), mid = m(p012, p123);
+  flattenCubic(p0, p01, p012, mid, tol, out, depth + 1);
+  flattenCubic(mid, p123, p23, p3, tol, out, depth + 1);
+}
+
+function segmentsToPolylines(segs, m, tol) {
+  const lines = [];
+  let cur = null, start = null;
+  for (const s of segs) {
+    if (s.type === 'M') {
+      if (cur && cur.length > 1) lines.push(cur);
+      start = ap(m, ...s.pts[0]);
+      cur = [start];
+    } else if (s.type === 'L') {
+      if (!cur) cur = [start = [0, 0]];
+      cur.push(ap(m, ...s.pts[0]));
+    } else if (s.type === 'C') {
+      if (!cur) cur = [start = [0, 0]];
+      const p0 = cur[cur.length - 1];
+      flattenCubic(p0, ap(m, ...s.pts[0]), ap(m, ...s.pts[1]), ap(m, ...s.pts[2]), tol, cur);
+    } else if (s.type === 'Z') {
+      if (cur && cur.length) {
+        const a = cur[cur.length - 1];
+        if (Math.hypot(a[0] - start[0], a[1] - start[1]) > 1e-9) cur.push([...start]);
+        else cur[cur.length - 1] = [...start];
+        if (cur.length > 1) lines.push(cur);
+        cur = [[...start]];
+      }
+    }
+  }
+  if (cur && cur.length > 1) lines.push(cur);
+  return lines;
+}
+
+const fnum = (el, a, d = 0) => {
+  const v = parseFloat(el.getAttribute(a));
+  return Number.isFinite(v) ? v : d;
+};
+
+function shapeToPathData(el) {
+  const tag = el.localName;
+  if (tag === 'path') return el.getAttribute('d') || '';
+  if (tag === 'rect') {
+    const x = fnum(el, 'x'), y = fnum(el, 'y'), w = fnum(el, 'width'), h = fnum(el, 'height');
+    if (w <= 0 || h <= 0) return '';
+    let rx = el.hasAttribute('rx') ? fnum(el, 'rx') : null, ry = el.hasAttribute('ry') ? fnum(el, 'ry') : null;
+    if (rx == null) rx = ry ?? 0; if (ry == null) ry = rx;
+    rx = Math.min(rx, w / 2); ry = Math.min(ry, h / 2);
+    if (!rx || !ry) return `M${x},${y}H${x + w}V${y + h}H${x}Z`;
+    return `M${x + rx},${y}H${x + w - rx}A${rx},${ry} 0 0 1 ${x + w},${y + ry}V${y + h - ry}` +
+      `A${rx},${ry} 0 0 1 ${x + w - rx},${y + h}H${x + rx}A${rx},${ry} 0 0 1 ${x},${y + h - ry}` +
+      `V${y + ry}A${rx},${ry} 0 0 1 ${x + rx},${y}Z`;
+  }
+  if (tag === 'circle' || tag === 'ellipse') {
+    const cx = fnum(el, 'cx'), cy = fnum(el, 'cy');
+    const rx = tag === 'circle' ? fnum(el, 'r') : fnum(el, 'rx');
+    const ry = tag === 'circle' ? rx : fnum(el, 'ry');
+    if (rx <= 0 || ry <= 0) return '';
+    return `M${cx + rx},${cy}A${rx},${ry} 0 0 1 ${cx},${cy + ry}A${rx},${ry} 0 0 1 ${cx - rx},${cy}` +
+      `A${rx},${ry} 0 0 1 ${cx},${cy - ry}A${rx},${ry} 0 0 1 ${cx + rx},${cy}Z`;
+  }
+  if (tag === 'line') return `M${fnum(el, 'x1')},${fnum(el, 'y1')}L${fnum(el, 'x2')},${fnum(el, 'y2')}`;
+  if (tag === 'polyline' || tag === 'polygon') {
+    const v = (el.getAttribute('points') || '').match(/[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?/g) || [];
+    if (v.length < 4) return '';
+    let d = `M${v[0]},${v[1]}`;
+    for (let k = 2; k + 1 < v.length; k += 2) d += `L${v[k]},${v[k + 1]}`;
+    return tag === 'polygon' ? d + 'Z' : d;
+  }
+  return '';
+}
+
+function isHidden(el) {
+  const st = (el.getAttribute('style') || '').replace(/\s/g, '');
+  return el.getAttribute('display') === 'none' || el.getAttribute('visibility') === 'hidden' ||
+    /display:none/.test(st) || /visibility:hidden/.test(st);
+}
+
+/**
+ * Parse an SVG Document into mm polylines.
+ * Returns { paths, warnings, sizeMM: [w,h] }.
+ */
+function svgToPaths(doc, { tolerance = 0.02 } = {}) {
+  const root = doc.documentElement;
+  if (!root || root.localName !== 'svg') throw new Error('Not an SVG file');
+  const warnings = new Set();
+  const vb = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+  const hasVB = vb.length === 4 && vb.every(Number.isFinite) && vb[2] > 0 && vb[3] > 0;
+  const wmm = lengthToMM(root.getAttribute('width'));
+  const hmm = lengthToMM(root.getAttribute('height'));
+  let base;
+  let sizeMM;
+  if (hasVB) {
+    const sx = wmm != null ? wmm / vb[2] : hmm != null ? hmm / vb[3] : 25.4 / 96;
+    const sy = hmm != null ? hmm / vb[3] : sx;
+    const s = Math.min(sx, sy); // preserveAspectRatio xMidYMid meet, offsets ignored
+    base = [s, 0, 0, s, -vb[0] * s, -vb[1] * s];
+    sizeMM = [vb[2] * s, vb[3] * s];
+  } else {
+    const s = 25.4 / 96;
+    base = [s, 0, 0, s, 0, 0];
+    sizeMM = [wmm ?? 0, hmm ?? 0];
+  }
+  if (root.getAttribute('width')?.trim().endsWith('%')) warnings.add('Size given in %, assumed 96 dpi');
+
+  const paths = [];
+  const byId = (id) => doc.getElementById ? doc.getElementById(id) : root.querySelector(`#${CSS.escape(id)}`);
+  const walk = (el, m, depth) => {
+    if (depth > 30) return;
+    for (const c of el.children) {
+      const tag = c.localName;
+      if (SKIP.has(tag) || isHidden(c)) continue;
+      const cm = mul(m, parseTransform(c.getAttribute('transform')));
+      if (tag === 'g' || tag === 'a' || tag === 'switch') { walk(c, cm, depth + 1); continue; }
+      if (tag === 'svg') { // nested svg: treat as group with x/y offset
+        walk(c, mul(cm, [1, 0, 0, 1, fnum(c, 'x'), fnum(c, 'y')]), depth + 1); continue;
+      }
+      if (tag === 'use') {
+        const href = c.getAttribute('href') || c.getAttribute('xlink:href') ||
+          c.getAttributeNS?.('http://www.w3.org/1999/xlink', 'href');
+        const ref = href && href.startsWith('#') ? byId(href.slice(1)) : null;
+        if (ref) {
+          const um = mul(cm, [1, 0, 0, 1, fnum(c, 'x'), fnum(c, 'y')]);
+          const holder = { children: ref.localName === 'symbol' || ref.localName === 'g' ? ref.children : [ref] };
+          walk(holder, um, depth + 1);
+        }
+        continue;
+      }
+      if (tag === 'text' || tag === 'tspan' || tag === 'textPath') { warnings.add('Text found: convert text to paths before cutting'); continue; }
+      if (tag === 'image') { warnings.add('Images are ignored, only lines are cut'); continue; }
+      const d = shapeToPathData(c);
+      if (!d) continue;
+      try {
+        for (const pl of segmentsToPolylines(parsePathData(d), cm, tolerance)) paths.push(pl);
+      } catch (e) {
+        warnings.add('Skipped a shape the parser could not read');
+      }
+    }
+  };
+  walk(root, base, 0);
+  return { paths: paths.map(dedupe).filter((p) => p.length > 1), warnings: [...warnings], sizeMM };
+}
+
+function dedupe(p) {
+  const out = [p[0]];
+  for (let i = 1; i < p.length; i++) {
+    const a = out[out.length - 1];
+    if (Math.hypot(p[i][0] - a[0], p[i][1] - a[1]) >= 0.01 || i === p.length - 1) out.push(p[i]);
+  }
+  return out;
+}
+
+function bboxOf(paths) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of paths) for (const [x, y] of p) {
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return Number.isFinite(x0) ? { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 } : null;
+}
+
+/**
+ * Cut order: shapes inside other shapes first (so holes in letters are cut
+ * before the outline frees the piece), then nearest-next to save travel.
+ * Closed shapes start at the vertex nearest the head.
+ */
+function orderPaths(paths) {
+  const items = paths.map((p) => ({ p, b: bboxOf([p]) }));
+  for (const a of items) {
+    a.depth = 0;
+    for (const b of items) {
+      if (a === b) continue;
+      if (b.b.x0 <= a.b.x0 + 1e-6 && b.b.y0 <= a.b.y0 + 1e-6 && b.b.x1 >= a.b.x1 - 1e-6 && b.b.y1 >= a.b.y1 - 1e-6 &&
+        (b.b.w * b.b.h > a.b.w * a.b.h + 1e-6)) a.depth++;
+    }
+  }
+  const groups = new Map();
+  for (const it of items) { if (!groups.has(it.depth)) groups.set(it.depth, []); groups.get(it.depth).push(it); }
+  const depths = [...groups.keys()].sort((a, b) => b - a);
+  const out = [];
+  let hx = 0, hy = 0;
+  for (const d of depths) {
+    const left = groups.get(d).slice();
+    while (left.length) {
+      let best = 0, bestD = Infinity, bestIdx = 0;
+      for (let i = 0; i < left.length; i++) {
+        const p = left[i].p;
+        const closed = isClosed(p);
+        const cands = closed ? p : [p[0], p[p.length - 1]];
+        for (let k = 0; k < cands.length; k++) {
+          const dd = (cands[k][0] - hx) ** 2 + (cands[k][1] - hy) ** 2;
+          if (dd < bestD) { bestD = dd; best = i; bestIdx = closed ? k : k === 0 ? 0 : -1; }
+        }
+      }
+      let p = left.splice(best, 1)[0].p;
+      if (isClosed(p) && bestIdx > 0) p = rotateClosed(p, bestIdx);
+      else if (bestIdx === -1) p = p.slice().reverse();
+      out.push(p);
+      [hx, hy] = p[p.length - 1];
+    }
+  }
+  return out;
+}
+
+const isClosed = (p) => p.length > 2 && Math.hypot(p[0][0] - p[p.length - 1][0], p[0][1] - p[p.length - 1][1]) < 0.01;
+function rotateClosed(p, k) {
+  const ring = p.slice(0, -1);
+  const r = ring.slice(k).concat(ring.slice(0, k));
+  r.push([...r[0]]);
+  return r;
+}
+
+/** Add a small overcut to closed shapes so the start/end join is clean (blades only). */
+function addOvercut(paths, mm) {
+  if (!mm) return paths;
+  return paths.map((p) => {
+    if (!isClosed(p)) return p;
+    const out = p.slice();
+    let need = mm;
+    for (let i = 1; i < p.length && need > 0; i++) {
+      const a = p[i - 1], b = p[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (L >= need) { const t = need / L; out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); need = 0; }
+      else { out.push(b); need -= L; }
+    }
+    return out;
+  });
+}
+
+function translatePaths(paths, dx, dy) {
+  return paths.map((p) => p.map(([x, y]) => [x + dx, y + dy]));
+}
+
+// ---------------------------------------------------------------- job runner
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const dec = new TextDecoder();
+
+/**
+ * Transport interface: write(Uint8Array) → Promise, and an inbound byte
+ * buffer fed by notifications / a background reader. Implemented in the page.
+ */
+class Link {
+  constructor() { this.buf = []; this.waiters = []; this.closed = false; }
+  push(bytes) { for (const b of bytes) this.buf.push(b); this.waiters.splice(0).forEach((w) => w()); }
+  clear() { this.buf.length = 0; }
+  async readReply(timeout = 1000) {
+    const end = Date.now() + timeout;
+    for (;;) {
+      const i = this.buf.indexOf(ETX);
+      if (i >= 0) return Uint8Array.from(this.buf.splice(0, i + 1));
+      if (this.closed) throw new Error('Cutter disconnected');
+      const left = end - Date.now();
+      if (left <= 0) throw new Error('No reply from cutter');
+      await new Promise((r) => { this.waiters.push(r); setTimeout(r, Math.min(left, 100)); });
+    }
+  }
+}
+
+class Cutter {
+  constructor(transport, log = () => {}) { this.t = transport; this.log = log; this.hw = null; }
+
+  async send(cmds) { await this.t.write(encodeCommands(Array.isArray(cmds) ? cmds : [cmds])); }
+  async esc(code) { await this.t.write(Uint8Array.of(ESC, code)); }
+
+  async ask(writeFn, timeout = 1000) {
+    this.t.link.clear();
+    await writeFn();
+    try {
+      const r = await this.t.link.readReply(timeout);
+      return dec.decode(r.subarray(0, r.length - 1));
+    } catch { return null; }
+  }
+  version() { return this.ask(() => this.send('FG'), 10000); }
+  query(cmd) { return this.ask(() => this.send(cmd), 1000); }
+
+  async status() {
+    const r = await this.ask(() => this.esc(0x05), 5000);
+    if (r == null) return 'none';
+    const s = r.trim();
+    return { '0': 'ready', '1': 'moving', '2': 'unloaded' }[s] || s;
+  }
+
+  async toolSetup() {
+    const r = await this.ask(() => this.esc(0x15), 1000);
+    if (!r) return null;
+    const parts = r.split(',').map((v) => parseInt(v, 10));
+    return parts.every(Number.isFinite) ? parts : null;
+  }
+
+  async waitReady(timeout = 120000, interval = 50, onWait) {
+    const end = Date.now() + timeout;
+    let s = await this.status();
+    while (s !== 'ready') {
+      if (Date.now() > end) throw new Error(`Cutter not ready (${s})`);
+      if (s === 'unloaded' && onWait) onWait('Load the mat');
+      await sleep(interval);
+      s = await this.status();
+    }
+    return s;
+  }
+
+  async identify() {
+    const fw = await this.version();
+    this.firmware = fw;
+    const byName = hardwareFromName(fw);
+    if (byName) this.hw = byName;
+    return fw;
+  }
+
+  /** Run a whole job. job: { paths (mm, ordered), settings, offset, endOffset } */
+  async run(job, { onProgress = () => {}, shouldStop = () => false } = {}) {
+    const hw = this.hw || { key: 'cameo5', ...HW.cameo5 };
+    const st = await this.status();
+    if (st === 'unloaded') throw new Error('No mat loaded. Load the mat, then press Cut again.');
+    if (st === 'none') throw new Error('The cutter is not answering');
+
+    // initialize()
+    await this.esc(0x04);
+    await this.version();
+    await this.query('TB71');
+    await this.query('FA');
+
+    const tools = await this.toolSetup();
+    const th = job.settings.toolholder || 1;
+    const current = tools ? tools[th - 1] : null;
+    if (job.settings.tool === 'pen' && current != null && current !== 7 && current !== 0) {
+      this.log(`Holder ${th} reports tool ${current}, not a pen`);
+    }
+    const setup = setupCommands(hw, job.settings, current);
+    await this.send(setup);
+
+    const matH = job.mediaHeight;
+    const plot = plotCommands(hw, job.paths, { mediaHeight: matH, offset: job.offset || [0, 0] });
+    const chunks = safeChunks(encodeCommands(plot.cmds));
+    const total = chunks.reduce((a, c) => a + c.length, 0);
+    let sent = 0;
+    for (const c of chunks) {
+      if (shouldStop()) { this.log('Stopped by you'); break; }
+      await this.t.write(c);
+      sent += c.length;
+      onProgress(sent / total);
+      await this.waitReady(120000, 50);
+    }
+    await this.send(endCommands(plot.bbox, job.endOffset || 0));
+    return { clipped: plot.clipped, bbox: plot.bbox };
+  }
+}
+
+
+// ------------------------------------------------------------- state
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const DEFAULT_PRESETS = [
+  { id: 'paper',   name: 'Copy paper',    tool: 'autoblade', depth: 1, force: 10, speed: 5, passes: 1 },
+  { id: 'card',    name: 'Cardstock',     tool: 'autoblade', depth: 4, force: 26, speed: 5, passes: 1 },
+  { id: 'vinyl',   name: 'Vinyl',         tool: 'autoblade', depth: 1, force: 10, speed: 5, passes: 1 },
+  { id: 'sticker', name: 'Sticker paper', tool: 'autoblade', depth: 2, force: 15, speed: 5, passes: 1 },
+  { id: 'pen',     name: 'Pen',           tool: 'pen',       depth: 0, force: 10, speed: 8, passes: 1 },
+];
+const S = {
+  via: store.get('cutter.via', 'ble'),
+  presets: store.get('cutter.presets', DEFAULT_PRESETS),
+  presetId: store.get('cutter.preset', 'paper'),
+  holder: store.get('cutter.holder', 1),
+  mat: store.get('cutter.mat', 'cameo_12x12'),
+  design: null,           // { name, paths (normalised to 0,0), w, h, warnings }
+  pos: [10, 10],
+  link: null, cutter: null, busy: false, stop: false,
+};
+if (!S.presets.find((p) => p.id === S.presetId)) S.presetId = S.presets[0].id;
+const preset = () => S.presets.find((p) => p.id === S.presetId);
+
+const logEl = $('log');
+function log(msg) {
+  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  logEl.textContent += `${t}  ${msg}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function dock(msg, kind = '') { const d = $('dockMsg'); d.textContent = msg; d.className = 'msg ' + kind; }
+
+// ------------------------------------------------------------- transports
+// sleep() comes from the core
+
+async function connectBle() {
+  if (!navigator.bluetooth) throw new Error("This browser can't use Bluetooth. Open the page in Chrome on Android.");
+  const device = await navigator.bluetooth.requestDevice({
+    filters: [{ services: [BLE.SERVICE] }, { namePrefix: 'CAMEO' }, { namePrefix: 'Cameo' }],
+    optionalServices: [BLE.SERVICE],
+  });
+  log(`Picked ${device.name || 'a device'}`);
+  const gatt = await device.gatt.connect();
+  const svc = await gatt.getPrimaryService(BLE.SERVICE);
+  const [w, r, c] = await Promise.all([BLE.WRITE, BLE.READ, BLE.CONTROL].map((u) => svc.getCharacteristic(u)));
+  const link = new Link();
+  r.addEventListener('characteristicvaluechanged', (e) => {
+    const v = e.target.value; link.push(new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
+  });
+  await c.startNotifications();
+  await r.startNotifications();
+  for (const ch of [c, r, w]) await ch.writeValueWithResponse(Uint8Array.from(BLE.INIT));
+  await sleep(1000);
+  link.clear();
+  let queue = Promise.resolve();
+  const writeChunk = async (chunk) => {
+    for (let attempt = 0; ; attempt++) {
+      try { return await w.writeValueWithResponse(chunk); }
+      catch (e) { if (attempt >= 3 || !gatt.connected) throw e; await sleep(100 * 2 ** attempt); }
+    }
+  };
+  const t = {
+    kind: 'Bluetooth', name: device.name || '', link,
+    write(bytes) {
+      queue = queue.then(async () => { for (let o = 0; o < bytes.length; o += BLE.CHUNK) await writeChunk(bytes.slice(o, o + BLE.CHUNK)); });
+      return queue;
+    },
+    close() { try { gatt.disconnect(); } catch {} },
+  };
+  device.addEventListener('gattserverdisconnected', () => { link.closed = true; onLost(t); });
+  return t;
+}
+
+async function connectUsb() {
+  if (!navigator.usb) throw new Error("This browser can't use the USB cable. Open the page in Chrome on Android.");
+  const device = await navigator.usb.requestDevice({ filters: USB.VENDORS.map((vendorId) => ({ vendorId })) });
+  await device.open();
+  if (device.configuration === null) await device.selectConfiguration(1);
+  const iface = device.configuration.interfaces.find((i) => i.alternate.endpoints.some((e) => e.type === 'bulk'));
+  if (!iface) throw new Error('The cutter did not offer a data connection');
+  await device.claimInterface(iface.interfaceNumber);
+  const eps = iface.alternate.endpoints;
+  const out = (eps.find((e) => e.type === 'bulk' && e.direction === 'out') || { endpointNumber: USB.WRITE_EP }).endpointNumber;
+  const inn = (eps.find((e) => e.type === 'bulk' && e.direction === 'in') || { endpointNumber: USB.READ_EP }).endpointNumber;
+  const link = new Link();
+  (async () => {
+    while (!link.closed) {
+      try {
+        const r = await device.transferIn(inn, 64);
+        if (r.data && r.data.byteLength) link.push(new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength));
+      } catch { link.closed = true; }
+    }
+  })();
+  let queue = Promise.resolve();
+  const t = {
+    kind: 'USB cable', name: device.productName || '', link, usb: [device.vendorId, device.productId],
+    write(bytes) {
+      queue = queue.then(async () => { for (let o = 0; o < bytes.length; o += 4096) await device.transferOut(out, bytes.slice(o, o + 4096)); });
+      return queue;
+    },
+    close() { link.closed = true; device.close().catch(() => {}); },
+  };
+  navigator.usb.addEventListener('disconnect', (e) => { if (e.device === device) { link.closed = true; onLost(t); } });
+  return t;
+}
+
+function onLost(t) {
+  if (S.link !== t) return;
+  S.link = null; S.cutter = null;
+  log('Connection lost');
+  setConn();
+  if (!S.busy) dock('Cutter disconnected', 'bad');
+}
+
+async function connect() {
+  if (S.link) { S.link.close(); S.link = null; S.cutter = null; setConn(); return; }
+  $('connNote').className = 'note';
+  setConn('busy', 'Connecting…');
+  try {
+    const t = S.via === 'usb' ? await connectUsb() : await connectBle();
+    const cutter = new Cutter(t, log);
+    cutter.hw = t.usb ? hardwareFromUsb(...t.usb) : hardwareFromName(t.name);
+    const fw = await cutter.identify();
+    if (!cutter.hw) cutter.hw = { key: 'cameo5', ...HARDWARE.cameo5 };
+    log(`Connected over ${t.kind}: ${cutter.hw.name}${fw ? ` (firmware ${fw.trim()})` : ''}`);
+    S.link = t; S.cutter = cutter;
+    const st = await cutter.status();
+    log(`Status: ${st}`);
+    setConn();
+    dock(st === 'unloaded' ? 'Connected. Load the mat.' : 'Ready to cut', 'good');
+  } catch (e) {
+    setConn();
+    const name = e && e.name;
+    let msg = e && e.message ? e.message : String(e);
+    if (name === 'NotFoundError') {
+      msg = S.via === 'usb'
+        ? 'No cutter picked. If the Cameo never appears in the list, the cable is probably charge-only or the phone needs a USB-C OTG adapter.'
+        : 'No cutter picked. Check the Cameo is on, Bluetooth is on, and Silhouette Studio or Go is closed everywhere.';
+    } else if (name === 'SecurityError') {
+      msg = 'This page is not allowed to use Bluetooth or USB here. Open it from its own web address in Chrome.';
+    } else if (name === 'NetworkError') {
+      msg = 'The cutter refused the connection. Turn it off and on, then try again.';
+    }
+    $('connNote').textContent = msg;
+    $('connNote').className = 'note bad';
+    log('Connect failed: ' + (e && (e.name + ': ' + e.message)));
+  }
+}
+
+function setConn(state, text) {
+  const dot = $('dot');
+  dot.className = 'dot' + (state === 'busy' ? ' busy' : S.link ? ' on' : '');
+  $('connText').textContent = text || (S.link ? `${S.cutter?.hw?.name || 'Cutter'} · ${S.link.kind}` : 'Not connected');
+  $('connectBtn').textContent = S.link ? 'Disconnect' : 'Connect';
+  $('connectRow').hidden = !!S.link;
+  updateCut();
+}
+
+// ------------------------------------------------------------- design
+function loadSvgText(text, name) {
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+  if (doc.querySelector('parsererror')) throw new Error('That file is not a readable SVG');
+  const res = svgToPaths(doc);
+  if (!res.paths.length) throw new Error(res.warnings[0] || 'No cut lines found in that file');
+  const b = bboxOf(res.paths);
+  S.design = { name, paths: translatePaths(res.paths, -b.x0, -b.y0), w: b.w, h: b.h, warnings: res.warnings };
+  S.pos = [Math.max(10, round1(b.x0)), Math.max(10, round1(b.y0))];
+  log(`Loaded ${name}: ${res.paths.length} lines, ${b.w.toFixed(1)} × ${b.h.toFixed(1)} mm`);
+  renderAll();
+}
+const round1 = (v) => Math.round(v * 10) / 10;
+
+function testDesign() {
+  // 25 mm square with a triangle inside, the usual test-cut shape
+  const sq = [[0, 0], [25, 0], [25, 25], [0, 25], [0, 0]];
+  const tri = [[12.5, 5], [20, 19], [5, 19], [12.5, 5]];
+  S.design = { name: 'Test square', paths: [sq, tri], w: 25, h: 25, warnings: [] };
+  S.pos = [10, 10];
+  renderAll();
+}
+
+function jobPaths() {
+  if (!S.design) return [];
+  let p = orderPaths(translatePaths(S.design.paths, S.pos[0], S.pos[1]));
+  const n = Math.max(1, Math.min(5, preset().passes | 0));
+  if (n > 1) p = Array.from({ length: n }, () => p).flat();
+  return p;
+}
+
+function matSize() {
+  const m = MATS[S.mat];
+  if (m && m.w) return [m.w * 25.4, m.h * 25.4];
+  const hw = S.cutter?.hw || HARDWARE.cameo5;
+  const h = S.design ? Math.max(304.8, S.pos[1] + S.design.h + 20) : 304.8;
+  return [hw.width, h];
+}
+
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  parent && parent.appendChild(e);
+  return e;
+}
+
+function renderMat() {
+  const svg = $('matSvg');
+  const [W, H] = matSize();
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.replaceChildren();
+  el('rect', { x: 0, y: 0, width: W, height: H, fill: 'none', stroke: 'var(--grid)', 'stroke-width': 0.8 }, svg);
+  const inch = 25.4;
+  for (let i = 1; i * inch < W - 0.1; i++) el('line', { x1: i * inch, y1: 0, x2: i * inch, y2: H, stroke: 'var(--grid)', 'stroke-width': 0.35 }, svg);
+  for (let i = 1; i * inch < H - 0.1; i++) el('line', { x1: 0, y1: i * inch, x2: W, y2: i * inch, stroke: 'var(--grid)', 'stroke-width': 0.35 }, svg);
+  for (let i = 1; i * inch <= W + 0.1; i++) { const t = el('text', { x: i * inch - inch / 2, y: -6, 'text-anchor': 'middle', class: 'ruler', 'font-size': 7 }, svg); t.textContent = i; }
+  for (let i = 1; i * inch <= H + 0.1; i++) { const t = el('text', { x: -6, y: i * inch - inch / 2 + 2.5, 'text-anchor': 'end', class: 'ruler', 'font-size': 7 }, svg); t.textContent = i; }
+  if (!S.design) {
+    const t = el('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', fill: 'var(--muted)', 'font-size': 9, 'font-family': 'var(--body)' }, svg);
+    t.textContent = 'Open an SVG or tap Test square';
+    return;
+  }
+  const g = el('g', { fill: 'none', stroke: 'var(--cut)', 'stroke-width': 0.6, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+  for (const p of translatePaths(S.design.paths, S.pos[0], S.pos[1])) {
+    el('polyline', { points: p.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ') }, g);
+  }
+  // start marker: where the blade first goes down
+  const first = jobPaths()[0];
+  if (first) el('circle', { cx: first[0][0], cy: first[0][1], r: 1.6, fill: 'var(--cut)' }, svg);
+}
+
+function renderMeta() {
+  const m = $('meta'), w = $('warns');
+  m.replaceChildren(); w.replaceChildren();
+  if (!S.design) return;
+  const d = S.design;
+  const add = (label, value) => { const s = document.createElement('span'); s.innerHTML = `${label} <b></b>`; s.querySelector('b').textContent = value; m.appendChild(s); };
+  add('', d.name);
+  add('Size', `${d.w.toFixed(1)} × ${d.h.toFixed(1)} mm`);
+  add('Lines', String(d.paths.length));
+  const [W, H] = matSize();
+  const warn = [...d.warnings];
+  if (S.pos[0] + d.w > W + 0.05 || S.pos[1] + d.h > H + 0.05) warn.push('Part of the design is off the mat. Move it or pick a bigger mat; the cutter will skip that part.');
+  for (const t of warn) { const p = document.createElement('p'); p.textContent = t; w.appendChild(p); }
+}
+
+function renderPresets() {
+  const tabs = $('presetTabs');
+  tabs.replaceChildren();
+  for (const p of S.presets) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'tab'; b.role = 'tab'; b.textContent = p.name;
+    b.setAttribute('aria-selected', String(p.id === S.presetId));
+    b.onclick = () => { S.presetId = p.id; store.set('cutter.preset', p.id); renderAll(); };
+    tabs.appendChild(b);
+  }
+  const p = preset();
+  $('tool').value = p.tool; $('depth').value = p.depth; $('force').value = p.force; $('speed').value = p.speed; $('passes').value = p.passes;
+  $('holder').value = String(S.holder); $('mat').value = S.mat;
+  $('depthField').hidden = p.tool !== 'autoblade';
+}
+
+function renderAll() {
+  $('posX').value = S.pos[0]; $('posY').value = S.pos[1];
+  renderPresets(); renderMat(); renderMeta(); updateCut();
+}
+
+function updateCut() {
+  const b = $('cutBtn');
+  if (S.busy) { b.textContent = 'Stop'; b.disabled = false; return; }
+  b.textContent = 'Cut';
+  b.disabled = !(S.design && S.cutter);
+  if (!S.busy && S.design && !S.cutter && !$('dockMsg').classList.contains('bad')) dock('Connect the cutter to cut');
+  if (!S.busy && !S.design && S.cutter) dock('Load a design to start');
+}
+
+// ------------------------------------------------------------- cut
+async function cut() {
+  if (S.busy) { S.stop = true; dock('Stopping after this section…'); return; }
+  const p = preset();
+  const settings = {
+    mat: S.mat, tool: p.tool, pressure: +p.force, speed: +p.speed,
+    depth: p.tool === 'autoblade' ? +p.depth : null, toolholder: +S.holder,
+  };
+  const paths = jobPaths();
+  S.busy = true; S.stop = false; updateCut();
+  $('barFill').style.width = '0%';
+  dock(`Cutting ${S.design.name}…`);
+  let lock = null;
+  try { lock = await navigator.wakeLock?.request('screen'); } catch {}
+  log(`Cut: ${p.name}, ${p.tool}${settings.depth != null ? ` depth ${settings.depth}` : ''}, force ${settings.pressure}, speed ${settings.speed}, ${paths.length} lines`);
+  try {
+    const res = await S.cutter.run(
+      { paths, settings, mediaHeight: matSize()[1] },
+      {
+        onProgress: (f) => { $('barFill').style.width = `${Math.round(f * 100)}%`; dock(`Cutting ${S.design.name}… ${Math.round(f * 100)}%`); },
+        shouldStop: () => S.stop,
+      },
+    );
+    if (res.clipped) log(`${res.clipped} points were outside the cutting area and skipped`);
+    dock(S.stop ? 'Stopped. Press the unload button on the Cameo.' : 'Done. Press the unload button on the Cameo.', S.stop ? '' : 'good');
+    $('barFill').style.width = '100%';
+  } catch (e) {
+    log('Cut failed: ' + e.message);
+    dock(e.message, 'bad');
+  } finally {
+    try { await lock?.release(); } catch {}
+    S.busy = false; updateCut();
+  }
+}
+
+// ------------------------------------------------------------- wiring
+function setVia(v) {
+  S.via = v; store.set('cutter.via', v);
+  $('viaBle').setAttribute('aria-selected', String(v === 'ble'));
+  $('viaUsb').setAttribute('aria-selected', String(v === 'usb'));
+  $('connNote').className = 'note';
+  $('connNote').textContent = v === 'usb'
+    ? 'Plug the cable into the Cameo and your phone, turn the Cameo on, then tap Connect.'
+    : 'Turn the Cameo on and close Silhouette Studio or Silhouette Go on any device, then tap Connect.';
+}
+$('viaBle').onclick = () => setVia('ble');
+$('viaUsb').onclick = () => setVia('usb');
+$('connectBtn').onclick = connect;
+$('cutBtn').onclick = cut;
+$('openBtn').onclick = () => $('file').click();
+$('testBtn').onclick = testDesign;
+$('file').onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try { loadSvgText(await f.text(), f.name.replace(/\.svg$/i, '')); }
+  catch (err) { dock(err.message, 'bad'); log('Open failed: ' + err.message); }
+  e.target.value = '';
+};
+for (const id of ['posX', 'posY']) $(id).oninput = () => {
+  const v = parseFloat($(id).value);
+  if (!Number.isFinite(v)) return;
+  S.pos[id === 'posX' ? 0 : 1] = Math.max(0, v);
+  renderMat(); renderMeta();
+};
+const LIMITS = { depth: [0, 10], force: [1, 33], speed: [1, 30], passes: [1, 5] };
+function setField(k, v) {
+  const [lo, hi] = LIMITS[k];
+  v = Math.max(lo, Math.min(hi, Math.round(v)));
+  preset()[k] = v; $(k).value = v;
+  store.set('cutter.presets', S.presets);
+  if (k === 'passes') renderMeta();
+}
+for (const k of Object.keys(LIMITS)) $(k).onchange = () => setField(k, parseFloat($(k).value) || 0);
+document.querySelectorAll('[data-step]').forEach((b) => b.onclick = () => {
+  const [k, d] = b.dataset.step.split(',');
+  setField(k, (parseFloat($(k).value) || 0) + +d);
+});
+$('tool').onchange = () => { preset().tool = $('tool').value; store.set('cutter.presets', S.presets); renderPresets(); };
+$('holder').onchange = () => { S.holder = +$('holder').value; store.set('cutter.holder', S.holder); };
+$('mat').onchange = () => { S.mat = $('mat').value; store.set('cutter.mat', S.mat); renderMat(); renderMeta(); };
+
+// open a design passed in the address: ?svg=<url>
+(async () => {
+  const u = new URLSearchParams(location.search).get('svg');
+  if (!u) return;
+  try {
+    const r = await fetch(u);
+    loadSvgText(await r.text(), decodeURIComponent(u.split('/').pop().replace(/\.svg.*$/i, '')) || 'Design');
+  } catch (e) { log('Could not load design from link: ' + e.message); }
+})();
+
+setVia(S.via);
+setConn();
+testDesign();
+dock(S.cutter ? 'Ready to cut' : 'Connect the cutter to cut');
+</script>
+</body>
+</html>

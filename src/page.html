@@ -1,0 +1,553 @@
+<title>Cameo Cutter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#eef1f4">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one phone column — a cutting mat as the hero, settings below, Cut docked to the bottom edge */
+:root {
+  --bg: #eef1f4;        /* cool workshop paper */
+  --surface: #ffffff;
+  --ink: #141a22;
+  --muted: #5d6877;
+  --line: #d3d9e1;
+  --grid: #c3ccd7;
+  --cut: #e0245e;       /* cut-line red */
+  --cut-ink: #ffffff;
+  --ok: #1d8a5b;
+  --warn: #b25b00;
+  --bad: #c62828;
+  --display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1318; --surface: #171c23; --ink: #e8edf3; --muted: #93a0b0; --line: #2a323d;
+    --grid: #303a46; --cut: #ff4f7f; --cut-ink: #1a0710; --ok: #3fbf86; --warn: #e39a3b; --bad: #ff6b6b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1318; --surface: #171c23; --ink: #e8edf3; --muted: #93a0b0; --line: #2a323d;
+  --grid: #303a46; --cut: #ff4f7f; --cut-ink: #1a0710; --ok: #3fbf86; --warn: #e39a3b; --bad: #ff6b6b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 560px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 140px; }
+
+header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); display: flex; align-items: center; gap: 12px; padding-block: 14px 12px; border-bottom: 1px solid var(--line); }
+.brand { font: 700 24px/1 var(--display); letter-spacing: .02em; text-transform: uppercase; }
+.conn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.conn span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: none; }
+.dot.on { background: var(--ok); }
+.dot.busy { background: var(--warn); }
+
+button { font: 600 14px/1 var(--body); color: var(--ink); background: transparent; border: 1.5px solid var(--ink); border-radius: 4px; padding: 11px 14px; cursor: pointer; }
+button:disabled { opacity: .4; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible, .tab:focus-visible { outline: 2px solid var(--cut); outline-offset: 2px; }
+button.primary { background: var(--cut); border-color: var(--cut); color: var(--cut-ink); }
+
+.tabs { display: flex; gap: 18px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line); }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex: none; border: 0; border-radius: 0; padding: 10px 0 9px; font: 500 15px/1 var(--body); color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--cut); }
+
+section { padding-block: 22px 4px; display: grid; gap: 14px; }
+h2 { margin: 0; font: 600 13px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+
+.connect-row { display: grid; gap: 12px; padding-block: 16px 0; }
+.connect-row .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+.note.bad { color: var(--bad); }
+
+/* the mat */
+.mat { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 22px 8px 8px 22px; }
+.mat svg { display: block; width: 100%; height: auto; max-width: 100%; overflow: visible; }
+.mat .ruler { font: 500 9px var(--mono); fill: var(--muted); }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 13px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.meta b { color: var(--ink); font-weight: 500; }
+.warns { display: grid; gap: 4px; }
+.warns p { margin: 0; font-size: 13px; color: var(--warn); }
+
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field label { font-size: 12px; color: var(--muted); }
+.field .val { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+.field input, .field select { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 500 16px var(--mono); padding: 10px; font-variant-numeric: tabular-nums; }
+.field .unit { align-self: center; padding-right: 10px; font: 12px var(--mono); color: var(--muted); }
+.step { border: 0; border-left: 1px solid var(--line); border-radius: 0; padding: 0 12px; font: 500 18px var(--mono); }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+.actions { display: flex; gap: 12px; flex-wrap: wrap; }
+input[type=file] { display: none; }
+
+details { border-top: 1px solid var(--line); padding-block: 14px; margin-top: 18px; }
+summary { cursor: pointer; font: 600 13px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+
+/* docked cut bar */
+.dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--line);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+.dock .inner { max-width: 560px; margin: 0 auto; display: grid; gap: 10px; }
+.dock .row { display: flex; gap: 12px; align-items: center; }
+.dock .msg { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); }
+.dock .msg.bad { color: var(--bad); }
+.dock .msg.good { color: var(--ok); }
+.dock button.primary { min-width: 120px; padding: 14px 22px; font-size: 16px; }
+.bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--cut); transition: width .2s; }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">Cutter</div>
+    <div class="conn"><span class="dot" id="dot"></span><span id="connText">Not connected</span></div>
+    <button id="connectBtn" type="button">Connect</button>
+  </header>
+
+  <div class="connect-row" id="connectRow">
+    <div class="tabs" role="tablist" aria-label="Connect by">
+      <button class="tab" role="tab" id="viaBle" aria-selected="true" type="button">Bluetooth</button>
+      <button class="tab" role="tab" id="viaUsb" aria-selected="false" type="button">USB cable</button>
+    </div>
+    <p class="note" id="connNote">Turn the Cameo on and close Silhouette Studio or Silhouette Go on any device, then tap Connect.</p>
+  </div>
+
+  <section aria-labelledby="hMat">
+    <h2 id="hMat">On the mat</h2>
+    <div class="mat"><svg id="matSvg" viewBox="0 0 304.8 304.8" role="img" aria-label="Cutting mat preview"></svg></div>
+    <div class="meta" id="meta"></div>
+    <div class="warns" id="warns"></div>
+    <div class="actions">
+      <button type="button" id="openBtn">Open SVG</button>
+      <button type="button" id="testBtn">Test square</button>
+      <input type="file" id="file" accept=".svg,image/svg+xml">
+    </div>
+    <div class="fields">
+      <div class="field"><label for="posX">From left edge</label>
+        <div class="val"><input id="posX" type="number" inputmode="decimal" step="1" min="0"><span class="unit">mm</span></div></div>
+      <div class="field"><label for="posY">From top edge</label>
+        <div class="val"><input id="posY" type="number" inputmode="decimal" step="1" min="0"><span class="unit">mm</span></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="hMaterial">
+    <h2 id="hMaterial">Material</h2>
+    <div class="tabs" role="tablist" aria-label="Material" id="presetTabs"></div>
+    <div class="fields">
+      <div class="field"><label for="tool">Tool</label>
+        <div class="val"><select id="tool"><option value="autoblade">AutoBlade</option><option value="blade">Ratchet blade</option><option value="pen">Pen</option></select></div></div>
+      <div class="field"><label for="holder">Holder</label>
+        <div class="val"><select id="holder"><option value="1">Left (1)</option><option value="2">Right (2)</option></select></div></div>
+      <div class="field" id="depthField"><label for="depth">Blade depth</label>
+        <div class="val"><input id="depth" type="number" inputmode="numeric" min="0" max="10"><button class="step" type="button" data-step="depth,-1" aria-label="Less depth">−</button><button class="step" type="button" data-step="depth,1" aria-label="More depth">+</button></div></div>
+      <div class="field"><label for="force">Force</label>
+        <div class="val"><input id="force" type="number" inputmode="numeric" min="1" max="33"><button class="step" type="button" data-step="force,-1" aria-label="Less force">−</button><button class="step" type="button" data-step="force,1" aria-label="More force">+</button></div></div>
+      <div class="field"><label for="speed">Speed</label>
+        <div class="val"><input id="speed" type="number" inputmode="numeric" min="1" max="30"><button class="step" type="button" data-step="speed,-1" aria-label="Slower">−</button><button class="step" type="button" data-step="speed,1" aria-label="Faster">+</button></div></div>
+      <div class="field"><label for="passes">Passes</label>
+        <div class="val"><input id="passes" type="number" inputmode="numeric" min="1" max="5"><button class="step" type="button" data-step="passes,-1" aria-label="Fewer passes">−</button><button class="step" type="button" data-step="passes,1" aria-label="More passes">+</button></div></div>
+      <div class="field"><label for="mat">Mat</label>
+        <div class="val"><select id="mat"><option value="cameo_12x12">12 × 12 in</option><option value="cameo_12x24">12 × 24 in</option><option value="no_mat">No mat (roll)</option></select></div></div>
+    </div>
+    <p class="hint">These are starting points. Changes save to this material on this phone.</p>
+  </section>
+
+  <details>
+    <summary>Details</summary>
+    <pre class="log" id="log"></pre>
+  </details>
+</div>
+
+<div class="dock">
+  <div class="inner">
+    <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
+    <div class="row">
+      <div class="msg" id="dockMsg">Load a design to start</div>
+      <button class="primary" type="button" id="cutBtn" disabled>Cut</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/*CORE*/
+
+// ------------------------------------------------------------- state
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const DEFAULT_PRESETS = [
+  { id: 'paper',   name: 'Copy paper',    tool: 'autoblade', depth: 1, force: 10, speed: 5, passes: 1 },
+  { id: 'card',    name: 'Cardstock',     tool: 'autoblade', depth: 4, force: 26, speed: 5, passes: 1 },
+  { id: 'vinyl',   name: 'Vinyl',         tool: 'autoblade', depth: 1, force: 10, speed: 5, passes: 1 },
+  { id: 'sticker', name: 'Sticker paper', tool: 'autoblade', depth: 2, force: 15, speed: 5, passes: 1 },
+  { id: 'pen',     name: 'Pen',           tool: 'pen',       depth: 0, force: 10, speed: 8, passes: 1 },
+];
+const S = {
+  via: store.get('cutter.via', 'ble'),
+  presets: store.get('cutter.presets', DEFAULT_PRESETS),
+  presetId: store.get('cutter.preset', 'paper'),
+  holder: store.get('cutter.holder', 1),
+  mat: store.get('cutter.mat', 'cameo_12x12'),
+  design: null,           // { name, paths (normalised to 0,0), w, h, warnings }
+  pos: [10, 10],
+  link: null, cutter: null, busy: false, stop: false,
+};
+if (!S.presets.find((p) => p.id === S.presetId)) S.presetId = S.presets[0].id;
+const preset = () => S.presets.find((p) => p.id === S.presetId);
+
+const logEl = $('log');
+function log(msg) {
+  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  logEl.textContent += `${t}  ${msg}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function dock(msg, kind = '') { const d = $('dockMsg'); d.textContent = msg; d.className = 'msg ' + kind; }
+
+// ------------------------------------------------------------- transports
+// sleep() comes from the core
+
+async function connectBle() {
+  if (!navigator.bluetooth) throw new Error("This browser can't use Bluetooth. Open the page in Chrome on Android.");
+  const device = await navigator.bluetooth.requestDevice({
+    filters: [{ services: [BLE.SERVICE] }, { namePrefix: 'CAMEO' }, { namePrefix: 'Cameo' }],
+    optionalServices: [BLE.SERVICE],
+  });
+  log(`Picked ${device.name || 'a device'}`);
+  const gatt = await device.gatt.connect();
+  const svc = await gatt.getPrimaryService(BLE.SERVICE);
+  const [w, r, c] = await Promise.all([BLE.WRITE, BLE.READ, BLE.CONTROL].map((u) => svc.getCharacteristic(u)));
+  const link = new Link();
+  r.addEventListener('characteristicvaluechanged', (e) => {
+    const v = e.target.value; link.push(new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
+  });
+  await c.startNotifications();
+  await r.startNotifications();
+  for (const ch of [c, r, w]) await ch.writeValueWithResponse(Uint8Array.from(BLE.INIT));
+  await sleep(1000);
+  link.clear();
+  let queue = Promise.resolve();
+  const writeChunk = async (chunk) => {
+    for (let attempt = 0; ; attempt++) {
+      try { return await w.writeValueWithResponse(chunk); }
+      catch (e) { if (attempt >= 3 || !gatt.connected) throw e; await sleep(100 * 2 ** attempt); }
+    }
+  };
+  const t = {
+    kind: 'Bluetooth', name: device.name || '', link,
+    write(bytes) {
+      queue = queue.then(async () => { for (let o = 0; o < bytes.length; o += BLE.CHUNK) await writeChunk(bytes.slice(o, o + BLE.CHUNK)); });
+      return queue;
+    },
+    close() { try { gatt.disconnect(); } catch {} },
+  };
+  device.addEventListener('gattserverdisconnected', () => { link.closed = true; onLost(t); });
+  return t;
+}
+
+async function connectUsb() {
+  if (!navigator.usb) throw new Error("This browser can't use the USB cable. Open the page in Chrome on Android.");
+  const device = await navigator.usb.requestDevice({ filters: USB.VENDORS.map((vendorId) => ({ vendorId })) });
+  await device.open();
+  if (device.configuration === null) await device.selectConfiguration(1);
+  const iface = device.configuration.interfaces.find((i) => i.alternate.endpoints.some((e) => e.type === 'bulk'));
+  if (!iface) throw new Error('The cutter did not offer a data connection');
+  await device.claimInterface(iface.interfaceNumber);
+  const eps = iface.alternate.endpoints;
+  const out = (eps.find((e) => e.type === 'bulk' && e.direction === 'out') || { endpointNumber: USB.WRITE_EP }).endpointNumber;
+  const inn = (eps.find((e) => e.type === 'bulk' && e.direction === 'in') || { endpointNumber: USB.READ_EP }).endpointNumber;
+  const link = new Link();
+  (async () => {
+    while (!link.closed) {
+      try {
+        const r = await device.transferIn(inn, 64);
+        if (r.data && r.data.byteLength) link.push(new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength));
+      } catch { link.closed = true; }
+    }
+  })();
+  let queue = Promise.resolve();
+  const t = {
+    kind: 'USB cable', name: device.productName || '', link, usb: [device.vendorId, device.productId],
+    write(bytes) {
+      queue = queue.then(async () => { for (let o = 0; o < bytes.length; o += 4096) await device.transferOut(out, bytes.slice(o, o + 4096)); });
+      return queue;
+    },
+    close() { link.closed = true; device.close().catch(() => {}); },
+  };
+  navigator.usb.addEventListener('disconnect', (e) => { if (e.device === device) { link.closed = true; onLost(t); } });
+  return t;
+}
+
+function onLost(t) {
+  if (S.link !== t) return;
+  S.link = null; S.cutter = null;
+  log('Connection lost');
+  setConn();
+  if (!S.busy) dock('Cutter disconnected', 'bad');
+}
+
+async function connect() {
+  if (S.link) { S.link.close(); S.link = null; S.cutter = null; setConn(); return; }
+  $('connNote').className = 'note';
+  setConn('busy', 'Connecting…');
+  try {
+    const t = S.via === 'usb' ? await connectUsb() : await connectBle();
+    const cutter = new Cutter(t, log);
+    cutter.hw = t.usb ? hardwareFromUsb(...t.usb) : hardwareFromName(t.name);
+    const fw = await cutter.identify();
+    if (!cutter.hw) cutter.hw = { key: 'cameo5', ...HARDWARE.cameo5 };
+    log(`Connected over ${t.kind}: ${cutter.hw.name}${fw ? ` (firmware ${fw.trim()})` : ''}`);
+    S.link = t; S.cutter = cutter;
+    const st = await cutter.status();
+    log(`Status: ${st}`);
+    setConn();
+    dock(st === 'unloaded' ? 'Connected. Load the mat.' : 'Ready to cut', 'good');
+  } catch (e) {
+    setConn();
+    const name = e && e.name;
+    let msg = e && e.message ? e.message : String(e);
+    if (name === 'NotFoundError') {
+      msg = S.via === 'usb'
+        ? 'No cutter picked. If the Cameo never appears in the list, the cable is probably charge-only or the phone needs a USB-C OTG adapter.'
+        : 'No cutter picked. Check the Cameo is on, Bluetooth is on, and Silhouette Studio or Go is closed everywhere.';
+    } else if (name === 'SecurityError') {
+      msg = 'This page is not allowed to use Bluetooth or USB here. Open it from its own web address in Chrome.';
+    } else if (name === 'NetworkError') {
+      msg = 'The cutter refused the connection. Turn it off and on, then try again.';
+    }
+    $('connNote').textContent = msg;
+    $('connNote').className = 'note bad';
+    log('Connect failed: ' + (e && (e.name + ': ' + e.message)));
+  }
+}
+
+function setConn(state, text) {
+  const dot = $('dot');
+  dot.className = 'dot' + (state === 'busy' ? ' busy' : S.link ? ' on' : '');
+  $('connText').textContent = text || (S.link ? `${S.cutter?.hw?.name || 'Cutter'} · ${S.link.kind}` : 'Not connected');
+  $('connectBtn').textContent = S.link ? 'Disconnect' : 'Connect';
+  $('connectRow').hidden = !!S.link;
+  updateCut();
+}
+
+// ------------------------------------------------------------- design
+function loadSvgText(text, name) {
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+  if (doc.querySelector('parsererror')) throw new Error('That file is not a readable SVG');
+  const res = svgToPaths(doc);
+  if (!res.paths.length) throw new Error(res.warnings[0] || 'No cut lines found in that file');
+  const b = bboxOf(res.paths);
+  S.design = { name, paths: translatePaths(res.paths, -b.x0, -b.y0), w: b.w, h: b.h, warnings: res.warnings };
+  S.pos = [Math.max(10, round1(b.x0)), Math.max(10, round1(b.y0))];
+  log(`Loaded ${name}: ${res.paths.length} lines, ${b.w.toFixed(1)} × ${b.h.toFixed(1)} mm`);
+  renderAll();
+}
+const round1 = (v) => Math.round(v * 10) / 10;
+
+function testDesign() {
+  // 25 mm square with a triangle inside, the usual test-cut shape
+  const sq = [[0, 0], [25, 0], [25, 25], [0, 25], [0, 0]];
+  const tri = [[12.5, 5], [20, 19], [5, 19], [12.5, 5]];
+  S.design = { name: 'Test square', paths: [sq, tri], w: 25, h: 25, warnings: [] };
+  S.pos = [10, 10];
+  renderAll();
+}
+
+function jobPaths() {
+  if (!S.design) return [];
+  let p = orderPaths(translatePaths(S.design.paths, S.pos[0], S.pos[1]));
+  const n = Math.max(1, Math.min(5, preset().passes | 0));
+  if (n > 1) p = Array.from({ length: n }, () => p).flat();
+  return p;
+}
+
+function matSize() {
+  const m = MATS[S.mat];
+  if (m && m.w) return [m.w * 25.4, m.h * 25.4];
+  const hw = S.cutter?.hw || HARDWARE.cameo5;
+  const h = S.design ? Math.max(304.8, S.pos[1] + S.design.h + 20) : 304.8;
+  return [hw.width, h];
+}
+
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  parent && parent.appendChild(e);
+  return e;
+}
+
+function renderMat() {
+  const svg = $('matSvg');
+  const [W, H] = matSize();
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.replaceChildren();
+  el('rect', { x: 0, y: 0, width: W, height: H, fill: 'none', stroke: 'var(--grid)', 'stroke-width': 0.8 }, svg);
+  const inch = 25.4;
+  for (let i = 1; i * inch < W - 0.1; i++) el('line', { x1: i * inch, y1: 0, x2: i * inch, y2: H, stroke: 'var(--grid)', 'stroke-width': 0.35 }, svg);
+  for (let i = 1; i * inch < H - 0.1; i++) el('line', { x1: 0, y1: i * inch, x2: W, y2: i * inch, stroke: 'var(--grid)', 'stroke-width': 0.35 }, svg);
+  for (let i = 1; i * inch <= W + 0.1; i++) { const t = el('text', { x: i * inch - inch / 2, y: -6, 'text-anchor': 'middle', class: 'ruler', 'font-size': 7 }, svg); t.textContent = i; }
+  for (let i = 1; i * inch <= H + 0.1; i++) { const t = el('text', { x: -6, y: i * inch - inch / 2 + 2.5, 'text-anchor': 'end', class: 'ruler', 'font-size': 7 }, svg); t.textContent = i; }
+  if (!S.design) {
+    const t = el('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', fill: 'var(--muted)', 'font-size': 9, 'font-family': 'var(--body)' }, svg);
+    t.textContent = 'Open an SVG or tap Test square';
+    return;
+  }
+  const g = el('g', { fill: 'none', stroke: 'var(--cut)', 'stroke-width': 0.6, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+  for (const p of translatePaths(S.design.paths, S.pos[0], S.pos[1])) {
+    el('polyline', { points: p.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ') }, g);
+  }
+  // start marker: where the blade first goes down
+  const first = jobPaths()[0];
+  if (first) el('circle', { cx: first[0][0], cy: first[0][1], r: 1.6, fill: 'var(--cut)' }, svg);
+}
+
+function renderMeta() {
+  const m = $('meta'), w = $('warns');
+  m.replaceChildren(); w.replaceChildren();
+  if (!S.design) return;
+  const d = S.design;
+  const add = (label, value) => { const s = document.createElement('span'); s.innerHTML = `${label} <b></b>`; s.querySelector('b').textContent = value; m.appendChild(s); };
+  add('', d.name);
+  add('Size', `${d.w.toFixed(1)} × ${d.h.toFixed(1)} mm`);
+  add('Lines', String(d.paths.length));
+  const [W, H] = matSize();
+  const warn = [...d.warnings];
+  if (S.pos[0] + d.w > W + 0.05 || S.pos[1] + d.h > H + 0.05) warn.push('Part of the design is off the mat. Move it or pick a bigger mat; the cutter will skip that part.');
+  for (const t of warn) { const p = document.createElement('p'); p.textContent = t; w.appendChild(p); }
+}
+
+function renderPresets() {
+  const tabs = $('presetTabs');
+  tabs.replaceChildren();
+  for (const p of S.presets) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'tab'; b.role = 'tab'; b.textContent = p.name;
+    b.setAttribute('aria-selected', String(p.id === S.presetId));
+    b.onclick = () => { S.presetId = p.id; store.set('cutter.preset', p.id); renderAll(); };
+    tabs.appendChild(b);
+  }
+  const p = preset();
+  $('tool').value = p.tool; $('depth').value = p.depth; $('force').value = p.force; $('speed').value = p.speed; $('passes').value = p.passes;
+  $('holder').value = String(S.holder); $('mat').value = S.mat;
+  $('depthField').hidden = p.tool !== 'autoblade';
+}
+
+function renderAll() {
+  $('posX').value = S.pos[0]; $('posY').value = S.pos[1];
+  renderPresets(); renderMat(); renderMeta(); updateCut();
+}
+
+function updateCut() {
+  const b = $('cutBtn');
+  if (S.busy) { b.textContent = 'Stop'; b.disabled = false; return; }
+  b.textContent = 'Cut';
+  b.disabled = !(S.design && S.cutter);
+  if (!S.busy && S.design && !S.cutter && !$('dockMsg').classList.contains('bad')) dock('Connect the cutter to cut');
+  if (!S.busy && !S.design && S.cutter) dock('Load a design to start');
+}
+
+// ------------------------------------------------------------- cut
+async function cut() {
+  if (S.busy) { S.stop = true; dock('Stopping after this section…'); return; }
+  const p = preset();
+  const settings = {
+    mat: S.mat, tool: p.tool, pressure: +p.force, speed: +p.speed,
+    depth: p.tool === 'autoblade' ? +p.depth : null, toolholder: +S.holder,
+  };
+  const paths = jobPaths();
+  S.busy = true; S.stop = false; updateCut();
+  $('barFill').style.width = '0%';
+  dock(`Cutting ${S.design.name}…`);
+  let lock = null;
+  try { lock = await navigator.wakeLock?.request('screen'); } catch {}
+  log(`Cut: ${p.name}, ${p.tool}${settings.depth != null ? ` depth ${settings.depth}` : ''}, force ${settings.pressure}, speed ${settings.speed}, ${paths.length} lines`);
+  try {
+    const res = await S.cutter.run(
+      { paths, settings, mediaHeight: matSize()[1] },
+      {
+        onProgress: (f) => { $('barFill').style.width = `${Math.round(f * 100)}%`; dock(`Cutting ${S.design.name}… ${Math.round(f * 100)}%`); },
+        shouldStop: () => S.stop,
+      },
+    );
+    if (res.clipped) log(`${res.clipped} points were outside the cutting area and skipped`);
+    dock(S.stop ? 'Stopped. Press the unload button on the Cameo.' : 'Done. Press the unload button on the Cameo.', S.stop ? '' : 'good');
+    $('barFill').style.width = '100%';
+  } catch (e) {
+    log('Cut failed: ' + e.message);
+    dock(e.message, 'bad');
+  } finally {
+    try { await lock?.release(); } catch {}
+    S.busy = false; updateCut();
+  }
+}
+
+// ------------------------------------------------------------- wiring
+function setVia(v) {
+  S.via = v; store.set('cutter.via', v);
+  $('viaBle').setAttribute('aria-selected', String(v === 'ble'));
+  $('viaUsb').setAttribute('aria-selected', String(v === 'usb'));
+  $('connNote').className = 'note';
+  $('connNote').textContent = v === 'usb'
+    ? 'Plug the cable into the Cameo and your phone, turn the Cameo on, then tap Connect.'
+    : 'Turn the Cameo on and close Silhouette Studio or Silhouette Go on any device, then tap Connect.';
+}
+$('viaBle').onclick = () => setVia('ble');
+$('viaUsb').onclick = () => setVia('usb');
+$('connectBtn').onclick = connect;
+$('cutBtn').onclick = cut;
+$('openBtn').onclick = () => $('file').click();
+$('testBtn').onclick = testDesign;
+$('file').onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try { loadSvgText(await f.text(), f.name.replace(/\.svg$/i, '')); }
+  catch (err) { dock(err.message, 'bad'); log('Open failed: ' + err.message); }
+  e.target.value = '';
+};
+for (const id of ['posX', 'posY']) $(id).oninput = () => {
+  const v = parseFloat($(id).value);
+  if (!Number.isFinite(v)) return;
+  S.pos[id === 'posX' ? 0 : 1] = Math.max(0, v);
+  renderMat(); renderMeta();
+};
+const LIMITS = { depth: [0, 10], force: [1, 33], speed: [1, 30], passes: [1, 5] };
+function setField(k, v) {
+  const [lo, hi] = LIMITS[k];
+  v = Math.max(lo, Math.min(hi, Math.round(v)));
+  preset()[k] = v; $(k).value = v;
+  store.set('cutter.presets', S.presets);
+  if (k === 'passes') renderMeta();
+}
+for (const k of Object.keys(LIMITS)) $(k).onchange = () => setField(k, parseFloat($(k).value) || 0);
+document.querySelectorAll('[data-step]').forEach((b) => b.onclick = () => {
+  const [k, d] = b.dataset.step.split(',');
+  setField(k, (parseFloat($(k).value) || 0) + +d);
+});
+$('tool').onchange = () => { preset().tool = $('tool').value; store.set('cutter.presets', S.presets); renderPresets(); };
+$('holder').onchange = () => { S.holder = +$('holder').value; store.set('cutter.holder', S.holder); };
+$('mat').onchange = () => { S.mat = $('mat').value; store.set('cutter.mat', S.mat); renderMat(); renderMeta(); };
+
+// open a design passed in the address: ?svg=<url>
+(async () => {
+  const u = new URLSearchParams(location.search).get('svg');
+  if (!u) return;
+  try {
+    const r = await fetch(u);
+    loadSvgText(await r.text(), decodeURIComponent(u.split('/').pop().replace(/\.svg.*$/i, '')) || 'Design');
+  } catch (e) { log('Could not load design from link: ' + e.message); }
+})();
+
+setVia(S.via);
+setConn();
+testDesign();
+dock(S.cutter ? 'Ready to cut' : 'Connect the cutter to cut');
+</script>
