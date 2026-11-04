@@ -166,13 +166,6 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
     <button id="connectBtn" type="button" class="primary">Connect</button>
   </header>
 
-  <div class="card" id="connectRow">
-    <div class="tabs" role="tablist" aria-label="Connect by">
-      <button class="tab" role="tab" id="viaBle" aria-selected="true" type="button">Bluetooth</button>
-      <button class="tab" role="tab" id="viaUsb" aria-selected="false" type="button">USB cable</button>
-    </div>
-    <p class="note" id="connNote">Turn the Cameo on and close Silhouette Studio or Silhouette Go on any device, then tap Connect.</p>
-  </div>
 
   <section class="card" aria-labelledby="hMat">
     <div class="card-head"><h2 id="hMat">On the mat</h2><span class="sub" id="matName"></span></div>
@@ -212,6 +205,15 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
       <div class="field" data-f="mat"><label for="mat">Mat</label>
         <div class="val"><select id="mat"><option value="cameo_12x12">12 × 12 in</option><option value="cameo_12x24">12 × 24 in</option><option value="no_mat">No mat (roll)</option></select></div></div>
     </div>
+  </section>
+
+  <section class="card" id="connectRow" aria-labelledby="hConn">
+    <div class="card-head"><h2 id="hConn">Connection</h2></div>
+    <div class="tabs" role="tablist" aria-label="Connect by">
+      <button class="tab" role="tab" id="viaBle" aria-selected="true" type="button">Bluetooth</button>
+      <button class="tab" role="tab" id="viaUsb" aria-selected="false" type="button">USB cable</button>
+    </div>
+    <p class="note" id="connNote">Turn the Cameo on and close Silhouette Studio or Silhouette Go on any device, then tap Connect.</p>
   </section>
 
   <details>
@@ -1129,6 +1131,7 @@ async function connect() {
     }
     $('connNote').textContent = msg;
     $('connNote').className = 'note bad';
+    dock(msg, 'bad');
     log('Connect failed: ' + (e && (e.name + ': ' + e.message)));
   }
 }
