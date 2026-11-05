@@ -241,9 +241,9 @@ const SHOW = {
   mat: (v) => ({ cameo_12x12: '12×12', cameo_12x24: '12×24', no_mat: 'No mat' }[v]),
 };
 const show = (f, v) => (SHOW[f] ? SHOW[f](v) : String(v));
-// Bookbinding numbers are placeholders until Moishi saves his own (confirmed: false).
+// Moishi's own bookbinding standard (5 Nov 2026).
 const DEFAULTS = [
-  { id: 'bookbinding', name: 'Bookbinding', tool: 'autoblade', holder: 1, depth: 5, force: 30, speed: 3, passes: 2, mat: 'cameo_12x12', confirmed: false },
+  { id: 'bookbinding', name: 'Bookbinding', tool: 'autoblade', holder: 1, depth: 3, force: 20, speed: 3, passes: 1, mat: 'cameo_12x12', confirmed: true },
   { id: 'paper', name: 'Copy paper', tool: 'autoblade', holder: 1, depth: 1, force: 10, speed: 5, passes: 1, mat: 'cameo_12x12' },
   { id: 'card', name: 'Cardstock', tool: 'autoblade', holder: 1, depth: 4, force: 26, speed: 5, passes: 1, mat: 'cameo_12x12' },
   { id: 'vinyl', name: 'Vinyl', tool: 'autoblade', holder: 1, depth: 1, force: 10, speed: 5, passes: 1, mat: 'cameo_12x12' },
@@ -254,6 +254,9 @@ const STD_KEY = 'cutter.standards.v2';
 let standards = store.get(STD_KEY, null);
 if (!Array.isArray(standards)) standards = DEFAULTS.map((d) => ({ ...d }));
 for (const d of DEFAULTS) if (!standards.find((s) => s.id === d.id)) standards.push({ ...d });
+// a phone still holding the old unsaved placeholders gets the real standard
+{ const bb = standards.find((s) => s.id === 'bookbinding');
+  if (bb && bb.confirmed === false) Object.assign(bb, DEFAULTS[0]); }
 
 const S = {
   via: store.get('cutter.via', 'ble'),
