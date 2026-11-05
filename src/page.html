@@ -245,9 +245,9 @@ const SHOW = {
   mat: (v) => ({ cameo_12x12: '12×12', cameo_12x24: '12×24', no_mat: 'No mat' }[v]),
 };
 const show = (f, v) => (SHOW[f] ? SHOW[f](v) : String(v));
-// Moishi's own bookbinding standard (5 Nov 2026).
+// Moishi's own bookbinding standard (5 Nov 2026; speed raised from 3 to 5 the same day).
 const DEFAULTS = [
-  { id: 'bookbinding', name: 'Bookbinding', tool: 'autoblade', holder: 1, depth: 3, force: 20, speed: 3, travel: 2, passes: 1, mat: 'cameo_12x12', confirmed: true },
+  { id: 'bookbinding', name: 'Bookbinding', tool: 'autoblade', holder: 1, depth: 3, force: 20, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12', confirmed: true, rev: 2 },
   { id: 'paper', name: 'Copy paper', tool: 'autoblade', holder: 1, depth: 1, force: 10, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12' },
   { id: 'card', name: 'Cardstock', tool: 'autoblade', holder: 1, depth: 4, force: 26, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12' },
   { id: 'vinyl', name: 'Vinyl', tool: 'autoblade', holder: 1, depth: 1, force: 10, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12' },
@@ -273,7 +273,9 @@ for (const d of DEFAULTS) if (!standards.find((s) => s.id === d.id)) standards.p
 for (const s of standards) if (s.travel == null) s.travel = 2;
 // a phone still holding the old unsaved placeholders gets the real standard
 { const bb = standards.find((s) => s.id === 'bookbinding');
-  if (bb && bb.confirmed === false) Object.assign(bb, DEFAULTS[0]); }
+  if (bb && bb.confirmed === false) Object.assign(bb, DEFAULTS[0]);
+  // his standard changed to speed 5: update the speed on his phone, keep everything else he saved
+  if (bb && !(bb.rev >= 2)) { bb.speed = DEFAULTS[0].speed; bb.rev = 2; store.set(STD_KEY, standards); } }
 
 const S = {
   via: store.get('cutter.via', 'ble'),
