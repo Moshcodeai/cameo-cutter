@@ -628,18 +628,40 @@ $('tool').onchange = () => { S.work.tool = $('tool').value; renderFields(); };
 $('holder').onchange = () => { S.work.holder = +$('holder').value; renderFields(); };
 $('mat').onchange = () => { S.work.mat = $('mat').value; renderFields(); renderMat(); renderMeta(); };
 
-// open a design passed in the address: ?svg=<url>
-(async () => {
+// Designs arrive in the link itself: #d=<deflate-raw, base64url SVG>&n=<name>
+// (made by the Cameo design skill), or ?svg=<url> for a hosted file.
+async function inflate(b64) {
+  const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Response(stream).text();
+}
+function linkDesign() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('d')) return { kind: 'packed', data: h.get('d'), name: h.get('n') || 'Design' };
   const u = new URLSearchParams(location.search).get('svg');
-  if (!u) return;
+  if (u) return { kind: 'url', data: u, name: decodeURIComponent(u.split('/').pop().replace(/\.svg.*$/i, '')) || 'Design' };
+  return null;
+}
+async function loadFromLink() {
+  const l = linkDesign();
+  if (!l) return false;
   try {
-    const r = await fetch(u);
-    loadSvgText(await r.text(), decodeURIComponent(u.split('/').pop().replace(/\.svg.*$/i, '')) || 'Design');
-  } catch (e) { log('Could not load design from link: ' + e.message); }
-})();
+    const text = l.kind === 'packed' ? await inflate(l.data) : await (await fetch(l.data)).text();
+    loadSvgText(text, l.name);
+    dock(S.cutter ? 'Ready to cut' : 'Design loaded. Connect the cutter to cut.', 'good');
+  } catch (e) {
+    log('Could not open the design in this link: ' + e.message);
+    dock('That design link is broken. Ask Claude to send it again.', 'bad');
+    if (!S.design) testDesign();
+  }
+  return true;
+}
+window.addEventListener('hashchange', loadFromLink);
 
 setVia(S.via);
 setConn();
-testDesign();
 dock('Connect the cutter to cut');
+if (!linkDesign()) testDesign();
+loadFromLink();
 </script>
