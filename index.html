@@ -1380,7 +1380,7 @@ async function inflate(b64) {
 }
 function linkDesign() {
   const h = new URLSearchParams(location.hash.slice(1));
-  if (h.get('d')) return { kind: 'packed', data: h.get('d'), name: h.get('n') || 'Design' };
+  if (h.get('d')) return { kind: 'packed', data: h.get('d'), name: h.get('n') || 'Design', material: h.get('m') || 'bookbinding' };
   const u = new URLSearchParams(location.search).get('svg');
   if (u) return { kind: 'url', data: u, name: decodeURIComponent(u.split('/').pop().replace(/\.svg.*$/i, '')) || 'Design' };
   return null;
@@ -1390,6 +1390,9 @@ async function loadFromLink() {
   if (!l) return false;
   try {
     const text = l.kind === 'packed' ? await inflate(l.data) : await (await fetch(l.data)).text();
+    // designs from a link always start on a saved standard (Bookbinding unless the link says otherwise)
+    const m = S.standards.find((x) => x.id === (l.material || 'bookbinding'));
+    if (m) { S.presetId = m.id; store.set('cutter.preset.v2', m.id); S.work = pick(m); }
     loadSvgText(text, l.name);
     dock(S.cutter ? 'Ready to cut' : 'Design loaded. Connect the cutter to cut.', 'good');
   } catch (e) {
