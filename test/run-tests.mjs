@@ -99,5 +99,29 @@ compare('half-steps', 'Silhouette_Cameo5', 'cameo5', [[[0.025, 0.075], [10.125, 
     `chunks ≤1024 bytes, end on a whole command (${ch.length} chunks)`);
 }
 
+// 7. two tapes: finish one tape before the other, and make that trip slowly
+{
+  // top tape: window with a small hole inside; bottom tape: window with a hole inside
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="304.8mm" height="304.8mm" viewBox="0 0 304.8 304.8">
+    <rect x="62.4" y="35.8" width="180" height="30" rx="3"/><rect x="140" y="45" width="10" height="10"/>
+    <rect x="62.4" y="239" width="180" height="30" rx="3"/><rect x="150" y="250" width="10" height="10"/></svg>`;
+  const o = core.orderPaths(core.svgToPaths(parse(svg)).paths);
+  const tops = o.map((p) => core.bboxOf([p]).y0 < 150);
+  ok(tops.join() === 'true,true,false,false', 'top tape finished (hole first) before the bottom tape');
+  ok(core.bboxOf([o[0]]).w < 20 && core.bboxOf([o[2]]).w < 20, 'holes still cut before their window on each tape');
+
+  const hw = { key: 'cameo5', ...core.HARDWARE.cameo5 };
+  const plain = core.plotCommands(hw, o, { mediaHeight: 304.8 });
+  const slow = core.plotCommands(hw, o, { mediaHeight: 304.8, slowTravel: { speed: 2, cutSpeed: 3, holder: 1, minFeedMm: 50 } });
+  const speeds = slow.cmds.map((c, i) => [c, i]).filter(([c]) => c.startsWith('!'));
+  // only the top tape → bottom tape trip feeds the mat far; moves along a tape stay normal
+  ok(slow.slowMoves === 1 && speeds.length === 2, `only the trip between tapes is slowed (got ${slow.slowMoves})`);
+  const iSlow = slow.cmds.indexOf('!2,1');
+  ok(iSlow > 0 && slow.cmds.slice(0, iSlow).length === plain.cmds.length - plain.cmds.slice(iSlow).length && /^M5\d{3},/.test(slow.cmds[iSlow + 1]), 'the slowed move goes down to the bottom tape');
+  ok(speeds.every(([c, i]) => c === (slow.cmds[i + 1]?.startsWith('M') ? '!2,1' : '!3,1')), 'slow speed set just before each long move and cut speed put back after');
+  ok(slow.cmds.filter((c) => !c.startsWith('!')).join() === plain.cmds.join(), 'cut lines unchanged by slow moves');
+  ok(plain.slowMoves === 0 && !plain.cmds.some((c) => c.startsWith('!')), 'no speed changes when slow moves are off');
+}
+
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');
 process.exit(fails ? 1 : 0);

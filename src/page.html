@@ -192,6 +192,8 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
         <div class="val"><input id="force" type="number" inputmode="numeric" min="1" max="33"><button class="step" type="button" data-step="force,-1" aria-label="Less force">−</button><button class="step" type="button" data-step="force,1" aria-label="More force">+</button></div></div>
       <div class="field" data-f="speed"><label for="speed">Speed</label>
         <div class="val"><input id="speed" type="number" inputmode="numeric" min="1" max="30"><button class="step" type="button" data-step="speed,-1" aria-label="Slower">−</button><button class="step" type="button" data-step="speed,1" aria-label="Faster">+</button></div></div>
+      <div class="field" data-f="travel"><label for="travel">Move speed</label>
+        <div class="val"><input id="travel" type="number" inputmode="numeric" min="1" max="30"><button class="step" type="button" data-step="travel,-1" aria-label="Slower moves">−</button><button class="step" type="button" data-step="travel,1" aria-label="Faster moves">+</button></div></div>
       <div class="field" data-f="passes"><label for="passes">Passes</label>
         <div class="val"><input id="passes" type="number" inputmode="numeric" min="1" max="5"><button class="step" type="button" data-step="passes,-1" aria-label="Fewer passes">−</button><button class="step" type="button" data-step="passes,1" aria-label="More passes">+</button></div></div>
       <div class="field" data-f="mat"><label for="mat">Mat</label>
@@ -233,8 +235,8 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-const FIELDS = ['tool', 'holder', 'depth', 'force', 'speed', 'passes', 'mat'];
-const LABEL = { tool: 'Tool', holder: 'Holder', depth: 'Blade depth', force: 'Force', speed: 'Speed', passes: 'Passes', mat: 'Mat' };
+const FIELDS = ['tool', 'holder', 'depth', 'force', 'speed', 'travel', 'passes', 'mat'];
+const LABEL = { tool: 'Tool', holder: 'Holder', depth: 'Blade depth', force: 'Force', speed: 'Speed', travel: 'Move speed', passes: 'Passes', mat: 'Mat' };
 const SHOW = {
   tool: (v) => ({ autoblade: 'AutoBlade', blade: 'Ratchet blade', pen: 'Pen' }[v]),
   holder: (v) => (v == 1 ? 'Left' : 'Right'),
@@ -243,17 +245,19 @@ const SHOW = {
 const show = (f, v) => (SHOW[f] ? SHOW[f](v) : String(v));
 // Moishi's own bookbinding standard (5 Nov 2026).
 const DEFAULTS = [
-  { id: 'bookbinding', name: 'Bookbinding', tool: 'autoblade', holder: 1, depth: 3, force: 20, speed: 3, passes: 1, mat: 'cameo_12x12', confirmed: true },
-  { id: 'paper', name: 'Copy paper', tool: 'autoblade', holder: 1, depth: 1, force: 10, speed: 5, passes: 1, mat: 'cameo_12x12' },
-  { id: 'card', name: 'Cardstock', tool: 'autoblade', holder: 1, depth: 4, force: 26, speed: 5, passes: 1, mat: 'cameo_12x12' },
-  { id: 'vinyl', name: 'Vinyl', tool: 'autoblade', holder: 1, depth: 1, force: 10, speed: 5, passes: 1, mat: 'cameo_12x12' },
-  { id: 'sticker', name: 'Sticker paper', tool: 'autoblade', holder: 1, depth: 2, force: 15, speed: 5, passes: 1, mat: 'cameo_12x12' },
-  { id: 'pen', name: 'Pen', tool: 'pen', holder: 2, depth: 0, force: 10, speed: 8, passes: 1, mat: 'cameo_12x12' },
+  { id: 'bookbinding', name: 'Bookbinding', tool: 'autoblade', holder: 1, depth: 3, force: 20, speed: 3, travel: 2, passes: 1, mat: 'cameo_12x12', confirmed: true },
+  { id: 'paper', name: 'Copy paper', tool: 'autoblade', holder: 1, depth: 1, force: 10, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12' },
+  { id: 'card', name: 'Cardstock', tool: 'autoblade', holder: 1, depth: 4, force: 26, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12' },
+  { id: 'vinyl', name: 'Vinyl', tool: 'autoblade', holder: 1, depth: 1, force: 10, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12' },
+  { id: 'sticker', name: 'Sticker paper', tool: 'autoblade', holder: 1, depth: 2, force: 15, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12' },
+  { id: 'pen', name: 'Pen', tool: 'pen', holder: 2, depth: 0, force: 10, speed: 8, travel: 2, passes: 1, mat: 'cameo_12x12' },
 ];
 const STD_KEY = 'cutter.standards.v2';
 let standards = store.get(STD_KEY, null);
 if (!Array.isArray(standards)) standards = DEFAULTS.map((d) => ({ ...d }));
 for (const d of DEFAULTS) if (!standards.find((s) => s.id === d.id)) standards.push({ ...d });
+// standards saved before "move speed between parts" existed get the slow default
+for (const s of standards) if (s.travel == null) s.travel = 2;
 // a phone still holding the old unsaved placeholders gets the real standard
 { const bb = standards.find((s) => s.id === 'bookbinding');
   if (bb && bb.confirmed === false) Object.assign(bb, DEFAULTS[0]); }
@@ -320,9 +324,9 @@ async function connectBle() {
   return t;
 }
 
-async function connectUsb() {
+async function connectUsb(known) {
   if (!navigator.usb) throw new Error("This browser can't use the USB cable. Open the page in Chrome on Android.");
-  const device = await navigator.usb.requestDevice({ filters: USB.VENDORS.map((vendorId) => ({ vendorId })) });
+  const device = known || await navigator.usb.requestDevice({ filters: USB.VENDORS.map((vendorId) => ({ vendorId })) });
   await device.open();
   if (device.configuration === null) await device.selectConfiguration(1);
   const iface = device.configuration.interfaces.find((i) => i.alternate.endpoints.some((e) => e.type === 'bulk'));
@@ -361,12 +365,14 @@ function onLost(t) {
   if (!S.busy) dock('Cutter disconnected', 'bad');
 }
 
-async function connect() {
+async function connect(known) {
   if (S.link) { S.link.close(); S.link = null; S.cutter = null; setConn(); return; }
+  if (S.connecting) return;
+  S.connecting = true;
   $('connNote').className = 'note';
   setConn('busy', 'Connecting…');
   try {
-    const t = S.via === 'usb' ? await connectUsb() : await connectBle();
+    const t = S.via === 'usb' || known ? await connectUsb(known) : await connectBle();
     const cutter = new Cutter(t, log);
     cutter.hw = t.usb ? hardwareFromUsb(...t.usb) : hardwareFromName(t.name);
     const fw = await cutter.identify();
@@ -394,8 +400,25 @@ async function connect() {
     $('connNote').className = 'note bad';
     dock(msg, 'bad');
     log('Connect failed: ' + (e && (e.name + ': ' + e.message)));
+  } finally {
+    S.connecting = false;
   }
 }
+
+// A Cameo already allowed over the USB cable reconnects by itself: when the
+// page opens (e.g. from a design link) and whenever the cable is plugged in.
+const isCameo = (d) => USB.VENDORS.includes(d.vendorId);
+async function autoConnectUsb() {
+  if (!navigator.usb || S.link || S.connecting) return;
+  try {
+    const d = (await navigator.usb.getDevices()).find(isCameo);
+    if (!d) return;
+    log('Found your Cameo on the USB cable, connecting…');
+    setVia('usb');
+    await connect(d);
+  } catch (e) { log('USB auto-connect skipped: ' + e.message); }
+}
+navigator.usb?.addEventListener('connect', (e) => { if (isCameo(e.device)) autoConnectUsb(); });
 
 function setConn(state, text) {
   $('dot').className = 'dot' + (state === 'busy' ? ' busy' : S.link ? ' on' : '');
@@ -556,7 +579,7 @@ async function cut() {
   const w = S.work, st = standard();
   const settings = {
     mat: w.mat, tool: w.tool, pressure: +w.force, speed: +w.speed,
-    depth: w.tool === 'autoblade' ? +w.depth : null, toolholder: +w.holder,
+    depth: w.tool === 'autoblade' ? +w.depth : null, toolholder: +w.holder, travelSpeed: +w.travel,
   };
   const paths = jobPaths();
   S.busy = true; S.stop = false; updateCut();
@@ -565,7 +588,7 @@ async function cut() {
   dock(`Cutting ${S.design.name}…`);
   let lock = null;
   try { lock = await navigator.wakeLock?.request('screen'); } catch {}
-  log(`Cut: ${st.name}${changed().length ? ' (changed)' : ''}, ${show('tool', w.tool)}${settings.depth != null ? ` depth ${settings.depth}` : ''}, force ${settings.pressure}, speed ${settings.speed}, ${w.passes} pass(es), ${paths.length} lines`);
+  log(`Cut: ${st.name}${changed().length ? ' (changed)' : ''}, ${show('tool', w.tool)}${settings.depth != null ? ` depth ${settings.depth}` : ''}, force ${settings.pressure}, speed ${settings.speed}, moves ${settings.travelSpeed}, ${w.passes} pass(es), ${paths.length} lines`);
   try {
     const res = await S.cutter.run(
       { paths, settings, mediaHeight: matSize()[1] },
@@ -598,7 +621,7 @@ function setVia(v) {
 }
 $('viaBle').onclick = () => setVia('ble');
 $('viaUsb').onclick = () => setVia('usb');
-$('connectBtn').onclick = connect;
+$('connectBtn').onclick = () => connect();
 $('cutBtn').onclick = cut;
 $('openBtn').onclick = () => $('file').click();
 $('testBtn').onclick = testDesign;
@@ -615,7 +638,7 @@ for (const id of ['posX', 'posY']) $(id).oninput = () => {
   S.pos[id === 'posX' ? 0 : 1] = Math.max(0, v);
   renderMat(); renderMeta();
 };
-const LIMITS = { depth: [0, 10], force: [1, 33], speed: [1, 30], passes: [1, 5] };
+const LIMITS = { depth: [0, 10], force: [1, 33], speed: [1, 30], travel: [1, 30], passes: [1, 5] };
 function setNum(k, v) {
   const [lo, hi] = LIMITS[k];
   S.work[k] = Math.max(lo, Math.min(hi, Math.round(v)));
@@ -670,4 +693,5 @@ setConn();
 dock('Connect the cutter to cut');
 if (!linkDesign()) testDesign();
 loadFromLink();
+autoConnectUsb();
 </script>

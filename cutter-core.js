@@ -132,7 +132,11 @@ export function setupCommands(hw, opts, currentTool = null) {
  * Plot commands, mirroring Graphtec.plot_cmds() with software clipping.
  * paths: [[[x,y],...],...] in mm (x across the machine, y down the feed).
  */
-export function plotCommands(hw, paths, { mediaWidth, mediaHeight, offset = [0, 0] } = {}) {
+export function plotCommands(hw, paths, { mediaWidth, mediaHeight, offset = [0, 0], slowTravel = null } = {}) {
+  // slowTravel: { speed, cutSpeed, holder, minFeedMm } — blade-up moves that feed
+  // the mat more than minFeedMm (e.g. from the top tape to the bottom tape) run
+  // at `speed`, then the cut speed is put back, so the mat isn't jerked through
+  // the rollers. Moves along the same strip stay at normal speed.
   const width = hw.width ?? mediaWidth;            // left-aligned: hardware width
   const clip = { llx: 0, urx: width, ury: 0, lly: mediaHeight };
   const fuzz = 0.05;
@@ -154,6 +158,7 @@ export function plotCommands(hw, paths, { mediaWidth, mediaHeight, offset = [0, 
   const xo = offset[0] + clip.llx, yo = offset[1] + clip.ury;
   const cmds = [];
   let clipped = 0;
+  let hx = 0, hy = 0, slowMoves = 0; // head starts at the mat origin
   for (const p of paths) {
     if (p.length < 2) continue;
     let x = p[0][0] + xo, y = p[0][1] + yo;
@@ -161,7 +166,10 @@ export function plotCommands(hw, paths, { mediaWidth, mediaHeight, offset = [0, 
     let last;
     [x, y, last] = clipPt(x, y);
     if (!last) clipped++;
+    const far = slowTravel && Math.abs(y - hy) > (slowTravel.minFeedMm ?? 50);
+    if (far) cmds.push(`!${slowTravel.speed},${slowTravel.holder}`);
     cmds.push(M(y, x));
+    if (far) { cmds.push(`!${slowTravel.cutSpeed},${slowTravel.holder}`); slowMoves++; }
     for (let j = 1; j < p.length; j++) {
       x = p[j][0] + xo; y = p[j][1] + yo;
       ext(x, y);
@@ -171,8 +179,9 @@ export function plotCommands(hw, paths, { mediaWidth, mediaHeight, offset = [0, 
       cmds.push(inside && last ? D(y, x) : M(y, x));
       last = inside;
     }
+    hx = x; hy = y;
   }
-  return { cmds, bbox, clipped };
+  return { cmds, bbox, clipped, slowMoves };
 }
 
 export function endCommands(bbox, endOffset = 0) {
@@ -561,11 +570,40 @@ export function orderPaths(paths) {
         (b.b.w * b.b.h > a.b.w * a.b.h + 1e-6)) a.depth++;
     }
   }
+  // Separate areas (e.g. a top tape and a bottom tape) are finished one at a
+  // time, nearest first, so the head only makes the long trip once.
+  const islands = clusterItems(items, 15);
+  const out = [];
+  let head = [0, 0];
+  while (islands.length) {
+    let bi = 0, bd = Infinity;
+    islands.forEach((isl, i) => {
+      for (const it of isl) {
+        const d = Math.max(0, it.b.x0 - head[0], head[0] - it.b.x1) ** 2 + Math.max(0, it.b.y0 - head[1], head[1] - it.b.y1) ** 2;
+        if (d < bd) { bd = d; bi = i; }
+      }
+    });
+    head = orderIsland(islands.splice(bi, 1)[0], head, out);
+  }
+  return out;
+}
+
+function clusterItems(items, gap) {
+  const parent = items.map((_, i) => i);
+  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    const a = items[i].b, b = items[j].b;
+    if (a.x0 - b.x1 <= gap && b.x0 - a.x1 <= gap && a.y0 - b.y1 <= gap && b.y0 - a.y1 <= gap) parent[find(i)] = find(j);
+  }
+  const m = new Map();
+  items.forEach((it, i) => { const r = find(i); if (!m.has(r)) m.set(r, []); m.get(r).push(it); });
+  return [...m.values()];
+}
+
+function orderIsland(items, [hx, hy], out) {
   const groups = new Map();
   for (const it of items) { if (!groups.has(it.depth)) groups.set(it.depth, []); groups.get(it.depth).push(it); }
   const depths = [...groups.keys()].sort((a, b) => b - a);
-  const out = [];
-  let hx = 0, hy = 0;
   for (const d of depths) {
     const left = groups.get(d).slice();
     while (left.length) {
@@ -586,7 +624,7 @@ export function orderPaths(paths) {
       [hx, hy] = p[p.length - 1];
     }
   }
-  return out;
+  return [hx, hy];
 }
 
 const isClosed = (p) => p.length > 2 && Math.hypot(p[0][0] - p[p.length - 1][0], p[0][1] - p[p.length - 1][1]) < 0.01;
@@ -717,7 +755,11 @@ export class Cutter {
     await this.send(setup);
 
     const matH = job.mediaHeight;
-    const plot = plotCommands(hw, job.paths, { mediaHeight: matH, offset: job.offset || [0, 0] });
+    const s = job.settings;
+    const slowTravel = s.travelSpeed && s.travelSpeed < s.speed
+      ? { speed: s.travelSpeed, cutSpeed: Math.min(30, Math.max(1, s.speed)), holder: th, minFeedMm: 50 } : null;
+    const plot = plotCommands(hw, job.paths, { mediaHeight: matH, offset: job.offset || [0, 0], slowTravel });
+    if (plot.slowMoves) this.log(`${plot.slowMoves} long move(s) at slow speed ${s.travelSpeed}`);
     const chunks = safeChunks(encodeCommands(plot.cmds));
     const total = chunks.reduce((a, c) => a + c.length, 0);
     let sent = 0;

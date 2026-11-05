@@ -200,6 +200,8 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
         <div class="val"><input id="force" type="number" inputmode="numeric" min="1" max="33"><button class="step" type="button" data-step="force,-1" aria-label="Less force">−</button><button class="step" type="button" data-step="force,1" aria-label="More force">+</button></div></div>
       <div class="field" data-f="speed"><label for="speed">Speed</label>
         <div class="val"><input id="speed" type="number" inputmode="numeric" min="1" max="30"><button class="step" type="button" data-step="speed,-1" aria-label="Slower">−</button><button class="step" type="button" data-step="speed,1" aria-label="Faster">+</button></div></div>
+      <div class="field" data-f="travel"><label for="travel">Move speed</label>
+        <div class="val"><input id="travel" type="number" inputmode="numeric" min="1" max="30"><button class="step" type="button" data-step="travel,-1" aria-label="Slower moves">−</button><button class="step" type="button" data-step="travel,1" aria-label="Faster moves">+</button></div></div>
       <div class="field" data-f="passes"><label for="passes">Passes</label>
         <div class="val"><input id="passes" type="number" inputmode="numeric" min="1" max="5"><button class="step" type="button" data-step="passes,-1" aria-label="Fewer passes">−</button><button class="step" type="button" data-step="passes,1" aria-label="More passes">+</button></div></div>
       <div class="field" data-f="mat"><label for="mat">Mat</label>
@@ -367,7 +369,11 @@ function setupCommands(hw, opts, currentTool = null) {
  * Plot commands, mirroring Graphtec.plot_cmds() with software clipping.
  * paths: [[[x,y],...],...] in mm (x across the machine, y down the feed).
  */
-function plotCommands(hw, paths, { mediaWidth, mediaHeight, offset = [0, 0] } = {}) {
+function plotCommands(hw, paths, { mediaWidth, mediaHeight, offset = [0, 0], slowTravel = null } = {}) {
+  // slowTravel: { speed, cutSpeed, holder, minFeedMm } — blade-up moves that feed
+  // the mat more than minFeedMm (e.g. from the top tape to the bottom tape) run
+  // at `speed`, then the cut speed is put back, so the mat isn't jerked through
+  // the rollers. Moves along the same strip stay at normal speed.
   const width = hw.width ?? mediaWidth;            // left-aligned: hardware width
   const clip = { llx: 0, urx: width, ury: 0, lly: mediaHeight };
   const fuzz = 0.05;
@@ -389,6 +395,7 @@ function plotCommands(hw, paths, { mediaWidth, mediaHeight, offset = [0, 0] } = 
   const xo = offset[0] + clip.llx, yo = offset[1] + clip.ury;
   const cmds = [];
   let clipped = 0;
+  let hx = 0, hy = 0, slowMoves = 0; // head starts at the mat origin
   for (const p of paths) {
     if (p.length < 2) continue;
     let x = p[0][0] + xo, y = p[0][1] + yo;
@@ -396,7 +403,10 @@ function plotCommands(hw, paths, { mediaWidth, mediaHeight, offset = [0, 0] } = 
     let last;
     [x, y, last] = clipPt(x, y);
     if (!last) clipped++;
+    const far = slowTravel && Math.abs(y - hy) > (slowTravel.minFeedMm ?? 50);
+    if (far) cmds.push(`!${slowTravel.speed},${slowTravel.holder}`);
     cmds.push(M(y, x));
+    if (far) { cmds.push(`!${slowTravel.cutSpeed},${slowTravel.holder}`); slowMoves++; }
     for (let j = 1; j < p.length; j++) {
       x = p[j][0] + xo; y = p[j][1] + yo;
       ext(x, y);
@@ -406,8 +416,9 @@ function plotCommands(hw, paths, { mediaWidth, mediaHeight, offset = [0, 0] } = 
       cmds.push(inside && last ? D(y, x) : M(y, x));
       last = inside;
     }
+    hx = x; hy = y;
   }
-  return { cmds, bbox, clipped };
+  return { cmds, bbox, clipped, slowMoves };
 }
 
 function endCommands(bbox, endOffset = 0) {
@@ -796,11 +807,40 @@ function orderPaths(paths) {
         (b.b.w * b.b.h > a.b.w * a.b.h + 1e-6)) a.depth++;
     }
   }
+  // Separate areas (e.g. a top tape and a bottom tape) are finished one at a
+  // time, nearest first, so the head only makes the long trip once.
+  const islands = clusterItems(items, 15);
+  const out = [];
+  let head = [0, 0];
+  while (islands.length) {
+    let bi = 0, bd = Infinity;
+    islands.forEach((isl, i) => {
+      for (const it of isl) {
+        const d = Math.max(0, it.b.x0 - head[0], head[0] - it.b.x1) ** 2 + Math.max(0, it.b.y0 - head[1], head[1] - it.b.y1) ** 2;
+        if (d < bd) { bd = d; bi = i; }
+      }
+    });
+    head = orderIsland(islands.splice(bi, 1)[0], head, out);
+  }
+  return out;
+}
+
+function clusterItems(items, gap) {
+  const parent = items.map((_, i) => i);
+  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    const a = items[i].b, b = items[j].b;
+    if (a.x0 - b.x1 <= gap && b.x0 - a.x1 <= gap && a.y0 - b.y1 <= gap && b.y0 - a.y1 <= gap) parent[find(i)] = find(j);
+  }
+  const m = new Map();
+  items.forEach((it, i) => { const r = find(i); if (!m.has(r)) m.set(r, []); m.get(r).push(it); });
+  return [...m.values()];
+}
+
+function orderIsland(items, [hx, hy], out) {
   const groups = new Map();
   for (const it of items) { if (!groups.has(it.depth)) groups.set(it.depth, []); groups.get(it.depth).push(it); }
   const depths = [...groups.keys()].sort((a, b) => b - a);
-  const out = [];
-  let hx = 0, hy = 0;
   for (const d of depths) {
     const left = groups.get(d).slice();
     while (left.length) {
@@ -821,7 +861,7 @@ function orderPaths(paths) {
       [hx, hy] = p[p.length - 1];
     }
   }
-  return out;
+  return [hx, hy];
 }
 
 const isClosed = (p) => p.length > 2 && Math.hypot(p[0][0] - p[p.length - 1][0], p[0][1] - p[p.length - 1][1]) < 0.01;
@@ -952,7 +992,11 @@ class Cutter {
     await this.send(setup);
 
     const matH = job.mediaHeight;
-    const plot = plotCommands(hw, job.paths, { mediaHeight: matH, offset: job.offset || [0, 0] });
+    const s = job.settings;
+    const slowTravel = s.travelSpeed && s.travelSpeed < s.speed
+      ? { speed: s.travelSpeed, cutSpeed: Math.min(30, Math.max(1, s.speed)), holder: th, minFeedMm: 50 } : null;
+    const plot = plotCommands(hw, job.paths, { mediaHeight: matH, offset: job.offset || [0, 0], slowTravel });
+    if (plot.slowMoves) this.log(`${plot.slowMoves} long move(s) at slow speed ${s.travelSpeed}`);
     const chunks = safeChunks(encodeCommands(plot.cmds));
     const total = chunks.reduce((a, c) => a + c.length, 0);
     let sent = 0;
@@ -975,8 +1019,8 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-const FIELDS = ['tool', 'holder', 'depth', 'force', 'speed', 'passes', 'mat'];
-const LABEL = { tool: 'Tool', holder: 'Holder', depth: 'Blade depth', force: 'Force', speed: 'Speed', passes: 'Passes', mat: 'Mat' };
+const FIELDS = ['tool', 'holder', 'depth', 'force', 'speed', 'travel', 'passes', 'mat'];
+const LABEL = { tool: 'Tool', holder: 'Holder', depth: 'Blade depth', force: 'Force', speed: 'Speed', travel: 'Move speed', passes: 'Passes', mat: 'Mat' };
 const SHOW = {
   tool: (v) => ({ autoblade: 'AutoBlade', blade: 'Ratchet blade', pen: 'Pen' }[v]),
   holder: (v) => (v == 1 ? 'Left' : 'Right'),
@@ -985,17 +1029,19 @@ const SHOW = {
 const show = (f, v) => (SHOW[f] ? SHOW[f](v) : String(v));
 // Moishi's own bookbinding standard (5 Nov 2026).
 const DEFAULTS = [
-  { id: 'bookbinding', name: 'Bookbinding', tool: 'autoblade', holder: 1, depth: 3, force: 20, speed: 3, passes: 1, mat: 'cameo_12x12', confirmed: true },
-  { id: 'paper', name: 'Copy paper', tool: 'autoblade', holder: 1, depth: 1, force: 10, speed: 5, passes: 1, mat: 'cameo_12x12' },
-  { id: 'card', name: 'Cardstock', tool: 'autoblade', holder: 1, depth: 4, force: 26, speed: 5, passes: 1, mat: 'cameo_12x12' },
-  { id: 'vinyl', name: 'Vinyl', tool: 'autoblade', holder: 1, depth: 1, force: 10, speed: 5, passes: 1, mat: 'cameo_12x12' },
-  { id: 'sticker', name: 'Sticker paper', tool: 'autoblade', holder: 1, depth: 2, force: 15, speed: 5, passes: 1, mat: 'cameo_12x12' },
-  { id: 'pen', name: 'Pen', tool: 'pen', holder: 2, depth: 0, force: 10, speed: 8, passes: 1, mat: 'cameo_12x12' },
+  { id: 'bookbinding', name: 'Bookbinding', tool: 'autoblade', holder: 1, depth: 3, force: 20, speed: 3, travel: 2, passes: 1, mat: 'cameo_12x12', confirmed: true },
+  { id: 'paper', name: 'Copy paper', tool: 'autoblade', holder: 1, depth: 1, force: 10, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12' },
+  { id: 'card', name: 'Cardstock', tool: 'autoblade', holder: 1, depth: 4, force: 26, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12' },
+  { id: 'vinyl', name: 'Vinyl', tool: 'autoblade', holder: 1, depth: 1, force: 10, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12' },
+  { id: 'sticker', name: 'Sticker paper', tool: 'autoblade', holder: 1, depth: 2, force: 15, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12' },
+  { id: 'pen', name: 'Pen', tool: 'pen', holder: 2, depth: 0, force: 10, speed: 8, travel: 2, passes: 1, mat: 'cameo_12x12' },
 ];
 const STD_KEY = 'cutter.standards.v2';
 let standards = store.get(STD_KEY, null);
 if (!Array.isArray(standards)) standards = DEFAULTS.map((d) => ({ ...d }));
 for (const d of DEFAULTS) if (!standards.find((s) => s.id === d.id)) standards.push({ ...d });
+// standards saved before "move speed between parts" existed get the slow default
+for (const s of standards) if (s.travel == null) s.travel = 2;
 // a phone still holding the old unsaved placeholders gets the real standard
 { const bb = standards.find((s) => s.id === 'bookbinding');
   if (bb && bb.confirmed === false) Object.assign(bb, DEFAULTS[0]); }
@@ -1062,9 +1108,9 @@ async function connectBle() {
   return t;
 }
 
-async function connectUsb() {
+async function connectUsb(known) {
   if (!navigator.usb) throw new Error("This browser can't use the USB cable. Open the page in Chrome on Android.");
-  const device = await navigator.usb.requestDevice({ filters: USB.VENDORS.map((vendorId) => ({ vendorId })) });
+  const device = known || await navigator.usb.requestDevice({ filters: USB.VENDORS.map((vendorId) => ({ vendorId })) });
   await device.open();
   if (device.configuration === null) await device.selectConfiguration(1);
   const iface = device.configuration.interfaces.find((i) => i.alternate.endpoints.some((e) => e.type === 'bulk'));
@@ -1103,12 +1149,14 @@ function onLost(t) {
   if (!S.busy) dock('Cutter disconnected', 'bad');
 }
 
-async function connect() {
+async function connect(known) {
   if (S.link) { S.link.close(); S.link = null; S.cutter = null; setConn(); return; }
+  if (S.connecting) return;
+  S.connecting = true;
   $('connNote').className = 'note';
   setConn('busy', 'Connecting…');
   try {
-    const t = S.via === 'usb' ? await connectUsb() : await connectBle();
+    const t = S.via === 'usb' || known ? await connectUsb(known) : await connectBle();
     const cutter = new Cutter(t, log);
     cutter.hw = t.usb ? hardwareFromUsb(...t.usb) : hardwareFromName(t.name);
     const fw = await cutter.identify();
@@ -1136,8 +1184,25 @@ async function connect() {
     $('connNote').className = 'note bad';
     dock(msg, 'bad');
     log('Connect failed: ' + (e && (e.name + ': ' + e.message)));
+  } finally {
+    S.connecting = false;
   }
 }
+
+// A Cameo already allowed over the USB cable reconnects by itself: when the
+// page opens (e.g. from a design link) and whenever the cable is plugged in.
+const isCameo = (d) => USB.VENDORS.includes(d.vendorId);
+async function autoConnectUsb() {
+  if (!navigator.usb || S.link || S.connecting) return;
+  try {
+    const d = (await navigator.usb.getDevices()).find(isCameo);
+    if (!d) return;
+    log('Found your Cameo on the USB cable, connecting…');
+    setVia('usb');
+    await connect(d);
+  } catch (e) { log('USB auto-connect skipped: ' + e.message); }
+}
+navigator.usb?.addEventListener('connect', (e) => { if (isCameo(e.device)) autoConnectUsb(); });
 
 function setConn(state, text) {
   $('dot').className = 'dot' + (state === 'busy' ? ' busy' : S.link ? ' on' : '');
@@ -1298,7 +1363,7 @@ async function cut() {
   const w = S.work, st = standard();
   const settings = {
     mat: w.mat, tool: w.tool, pressure: +w.force, speed: +w.speed,
-    depth: w.tool === 'autoblade' ? +w.depth : null, toolholder: +w.holder,
+    depth: w.tool === 'autoblade' ? +w.depth : null, toolholder: +w.holder, travelSpeed: +w.travel,
   };
   const paths = jobPaths();
   S.busy = true; S.stop = false; updateCut();
@@ -1307,7 +1372,7 @@ async function cut() {
   dock(`Cutting ${S.design.name}…`);
   let lock = null;
   try { lock = await navigator.wakeLock?.request('screen'); } catch {}
-  log(`Cut: ${st.name}${changed().length ? ' (changed)' : ''}, ${show('tool', w.tool)}${settings.depth != null ? ` depth ${settings.depth}` : ''}, force ${settings.pressure}, speed ${settings.speed}, ${w.passes} pass(es), ${paths.length} lines`);
+  log(`Cut: ${st.name}${changed().length ? ' (changed)' : ''}, ${show('tool', w.tool)}${settings.depth != null ? ` depth ${settings.depth}` : ''}, force ${settings.pressure}, speed ${settings.speed}, moves ${settings.travelSpeed}, ${w.passes} pass(es), ${paths.length} lines`);
   try {
     const res = await S.cutter.run(
       { paths, settings, mediaHeight: matSize()[1] },
@@ -1340,7 +1405,7 @@ function setVia(v) {
 }
 $('viaBle').onclick = () => setVia('ble');
 $('viaUsb').onclick = () => setVia('usb');
-$('connectBtn').onclick = connect;
+$('connectBtn').onclick = () => connect();
 $('cutBtn').onclick = cut;
 $('openBtn').onclick = () => $('file').click();
 $('testBtn').onclick = testDesign;
@@ -1357,7 +1422,7 @@ for (const id of ['posX', 'posY']) $(id).oninput = () => {
   S.pos[id === 'posX' ? 0 : 1] = Math.max(0, v);
   renderMat(); renderMeta();
 };
-const LIMITS = { depth: [0, 10], force: [1, 33], speed: [1, 30], passes: [1, 5] };
+const LIMITS = { depth: [0, 10], force: [1, 33], speed: [1, 30], travel: [1, 30], passes: [1, 5] };
 function setNum(k, v) {
   const [lo, hi] = LIMITS[k];
   S.work[k] = Math.max(lo, Math.min(hi, Math.round(v)));
@@ -1412,6 +1477,7 @@ setConn();
 dock('Connect the cutter to cut');
 if (!linkDesign()) testDesign();
 loadFromLink();
+autoConnectUsb();
 </script>
 </body>
 </html>
