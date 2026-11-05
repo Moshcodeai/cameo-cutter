@@ -161,6 +161,8 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
 
   <section class="card" aria-labelledby="hMat">
     <div class="card-head"><h2 id="hMat">On the mat</h2><span class="sub" id="matName"></span></div>
+    <div class="field"><label for="tpl">Template</label>
+      <div class="val"><select id="tpl"></select></div></div>
     <div class="mat"><svg id="matSvg" viewBox="0 0 304.8 304.8" role="img" aria-label="Cutting mat preview"></svg></div>
     <div class="meta" id="meta"></div>
     <div class="warns" id="warns"></div>
@@ -252,6 +254,17 @@ const DEFAULTS = [
   { id: 'sticker', name: 'Sticker paper', tool: 'autoblade', holder: 1, depth: 2, force: 15, speed: 5, travel: 2, passes: 1, mat: 'cameo_12x12' },
   { id: 'pen', name: 'Pen', tool: 'pen', holder: 2, depth: 0, force: 10, speed: 8, travel: 2, passes: 1, mat: 'cameo_12x12' },
 ];
+// Moishi's saved templates: pick one, check the mat, tap Cut. Shapes are in mat
+// millimetres (12 × 12 mat = 304.8 × 304.8), so each opens in its own position.
+// Claude adds new ones here when he asks to save a design as a template.
+const TEMPLATES = [
+  {
+    id: 'kriah-neimah-clouds', name: 'Kriah Neimah Clouds', material: 'bookbinding',
+    // 4" tape along the top: 110 × 10 mm window, 3 mm corners, centred on the tape
+    svg: '<svg xmlns="http://www.w3.org/2000/svg" width="304.8mm" height="304.8mm" viewBox="0 0 304.8 304.8"><rect x="97.4" y="45.8" width="110" height="10" rx="3" ry="3" fill="none" stroke="#000" stroke-width="0.3"/></svg>',
+  },
+];
+
 const STD_KEY = 'cutter.standards.v2';
 let standards = store.get(STD_KEY, null);
 if (!Array.isArray(standards)) standards = DEFAULTS.map((d) => ({ ...d }));
@@ -561,6 +574,7 @@ function renderFields() {
 
 function renderAll() {
   $('posX').value = S.pos[0]; $('posY').value = S.pos[1];
+  renderTemplates();
   renderPresets(); renderMat(); renderMeta(); updateCut();
 }
 
@@ -653,6 +667,24 @@ document.querySelectorAll('[data-step]').forEach((b) => b.onclick = () => {
 $('tool').onchange = () => { S.work.tool = $('tool').value; renderFields(); };
 $('holder').onchange = () => { S.work.holder = +$('holder').value; renderFields(); };
 $('mat').onchange = () => { S.work.mat = $('mat').value; renderFields(); renderMat(); renderMeta(); };
+
+// Templates dropdown
+function renderTemplates() {
+  const sel = $('tpl');
+  sel.replaceChildren(new Option('Choose a template', ''), ...TEMPLATES.map((t) => new Option(t.name, t.id)));
+  const cur = TEMPLATES.find((t) => S.design && t.name === S.design.name);
+  sel.value = cur ? cur.id : '';
+}
+$('tpl').onchange = () => {
+  const t = TEMPLATES.find((x) => x.id === $('tpl').value);
+  if (!t) return;
+  const m = S.standards.find((x) => x.id === t.material);
+  if (m) { S.presetId = m.id; store.set('cutter.preset.v2', m.id); S.work = pick(m); }
+  try {
+    loadSvgText(t.svg, t.name);
+    dock(S.cutter ? 'Ready to cut' : 'Template loaded. Connect the cutter to cut.', 'good');
+  } catch (e) { dock(e.message, 'bad'); }
+};
 
 // Designs arrive in the link itself: #d=<deflate-raw, base64url SVG>&n=<name>
 // (made by the Cameo design skill), or ?svg=<url> for a hosted file.

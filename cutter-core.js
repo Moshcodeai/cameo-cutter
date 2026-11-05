@@ -184,7 +184,14 @@ export function plotCommands(hw, paths, { mediaWidth, mediaHeight, offset = [0, 
   return { cmds, bbox, clipped, slowMoves };
 }
 
-export function endCommands(bbox, endOffset = 0) {
+/**
+ * Finish the job, mirroring Graphtec.plot()'s trailer.
+ * 'start' (mats): bring the mat back to where it started, like Silhouette Studio,
+ *   so one press of the unload button brings it out.
+ * 'below' (roll): park the media just past the cut and make that the new origin.
+ */
+export function endCommands(bbox, endOffset = 0, endPosition = 'below') {
+  if (endPosition === 'start') return ['L0', '\\0,0', 'M0,0', 'J0', 'FN0', 'TB50,0'];
   return [M((bbox.lly || 0) + endOffset, 0), 'SO0'];
 }
 
@@ -732,7 +739,7 @@ export class Cutter {
     return fw;
   }
 
-  /** Run a whole job. job: { paths (mm, ordered), settings, offset, endOffset } */
+  /** Run a whole job. job: { paths (mm, ordered), settings, offset, endOffset, endPosition } */
   async run(job, { onProgress = () => {}, shouldStop = () => false } = {}) {
     const hw = this.hw || { key: 'cameo5', ...HW.cameo5 };
     const st = await this.status();
@@ -770,7 +777,10 @@ export class Cutter {
       onProgress(sent / total);
       await this.waitReady(120000, 50);
     }
-    await this.send(endCommands(plot.bbox, job.endOffset || 0));
+    // wait for the last cut to finish, then return the mat (rolls are parked below the cut)
+    try { await this.waitReady(120000, 50); } catch {}
+    const endPosition = job.endPosition || (s.mat === 'no_mat' ? 'below' : 'start');
+    await this.send(endCommands(plot.bbox, job.endOffset || 0, endPosition));
     return { clipped: plot.clipped, bbox: plot.bbox };
   }
 }

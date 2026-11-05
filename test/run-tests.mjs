@@ -59,17 +59,17 @@ const len = (p) => p.slice(1).reduce((s, q, i) => s + Math.hypot(q[0] - p[i][0],
 
 // 5. byte-for-byte vs Python driver
 const tmp = mkdtempSync(join(tmpdir(), 'cutter-'));
-function compare(label, hwName, hwKey, paths, settings, mediaHeight) {
+function compare(label, hwName, hwKey, paths, settings, mediaHeight, endposition = 'below') {
   const hw = { key: hwKey, ...core.HARDWARE[hwKey] };
   const js = [
     Uint8Array.of(0x1b, 0x04),
     core.encodeCommands(core.setupCommands(hw, settings, null)),
   ];
   const plot = core.plotCommands(hw, paths, { mediaHeight, offset: [0, 0] });
-  js.push(core.encodeCommands(plot.cmds), core.encodeCommands(core.endCommands(plot.bbox, 0)));
+  js.push(core.encodeCommands(plot.cmds), core.encodeCommands(core.endCommands(plot.bbox, 0, endposition)));
   const jsBytes = Buffer.concat(js.map((b) => Buffer.from(b)));
   const jobFile = join(tmp, label + '.json'), out = join(tmp, label + '.bin');
-  writeFileSync(jobFile, JSON.stringify({ hardware: hwName, paths, settings, mediaWidth: hw.width, mediaHeight }));
+  writeFileSync(jobFile, JSON.stringify({ hardware: hwName, paths, settings, mediaWidth: hw.width, mediaHeight, endposition }));
   execFileSync('python3', ['-I', join(here, 'make-reference.py'), REPO, jobFile, out], { stdio: ['ignore', 'ignore', 'pipe'] });
   const py = readFileSync(out);
   const same = py.equals(jsBytes);
@@ -84,6 +84,8 @@ const design = core.orderPaths(core.svgToPaths(parse(`<svg xmlns="http://www.w3.
   <path d="M-5 -5 L 20 20"/></svg>`)).paths);
 compare('autoblade-12x12', 'Silhouette_Cameo5', 'cameo5', design,
   { mat: 'cameo_12x12', tool: 'autoblade', pressure: 14, speed: 5, depth: 3, toolholder: 1 }, 304.8);
+compare('autoblade-12x12-return-mat', 'Silhouette_Cameo5', 'cameo5', design,
+  { mat: 'cameo_12x12', tool: 'autoblade', pressure: 20, speed: 3, depth: 3, toolholder: 1 }, 304.8, 'start');
 compare('pen-nomat', 'Silhouette_Cameo5', 'cameo5', design,
   { mat: 'no_mat', tool: 'pen', pressure: 10, speed: 8, toolholder: 2 }, 500);
 compare('alpha-blade-12x24', 'Silhouette_Cameo5_Alpha', 'cameo5alpha', design,

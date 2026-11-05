@@ -33,7 +33,7 @@ dev.setup(media=300, pen=(tool == "pen"), toolholder=s.get("toolholder", 1),
           pressure=s["pressure"], speed=s["speed"])
 dev.plot(pathlist=[[tuple(pt) for pt in p] for p in job["paths"]],
          mediawidth=job["mediaWidth"], mediaheight=job["mediaHeight"],
-         offset=tuple(job.get("offset", (0, 0))), endposition="below",
+         offset=tuple(job.get("offset", (0, 0))), endposition=job.get("endposition", "below"),
          end_paper_offset=0)
 dev.commands.close()
 dev.commands = None
