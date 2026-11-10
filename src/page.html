@@ -679,7 +679,7 @@ $('mat').onchange = () => { S.work.mat = $('mat').value; renderFields(); renderM
 // Templates dropdown
 function renderTemplates() {
   const sel = $('tpl');
-  sel.replaceChildren(new Option('Choose a template', ''), ...TEMPLATES.map((t) => new Option(t.name, t.id)));
+  sel.replaceChildren(new Option('Choose a template', ''), ...[...TEMPLATES].sort((a, b) => a.name.localeCompare(b.name)).map((t) => new Option(t.name, t.id)));
   const cur = TEMPLATES.find((t) => S.design && t.name === S.design.name);
   sel.value = cur ? cur.id : '';
 }
