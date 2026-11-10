@@ -12,7 +12,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap">
 <style>
-/* Layout: one phone column of soft cards — a green cutting mat as the hero, settings below, a floating Cut bar */
+/* Layout: four text tabs (Cut, Make, History, Settings) under a sticky header; the Cut tab is just the green mat,
+   the template picker and a one-line summary of the settings; a floating bar holds Unload mat and Cut */
 :root {
   --bg: #f3f4f8;
   --card: #ffffff;
@@ -59,8 +60,14 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   padding-block: 0 150px; }
 
 /* header */
-header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg);
-  display: flex; align-items: center; gap: 12px; padding-block: 16px 6px; }
+header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); display: grid; gap: 8px; padding-block: 16px 0; }
+header .top { display: flex; align-items: center; gap: 12px; }
+header .tabs { gap: 24px; }
+header .tab { font-size: 16px; padding-block: 10px 12px; }
+.pane { display: grid; gap: 14px; min-width: 0; }
+.pane[hidden] { display: none; }
+.pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+.line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-block: -6px; }
 .brand { font: 800 30px/1 var(--display); letter-spacing: -.03em; }
 .conn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--muted); }
 .conn span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -112,7 +119,6 @@ h2 { margin: 0; font: 700 19px/1.1 var(--display); letter-spacing: -.01em; }
 .warns { display: grid; gap: 4px; }
 .warns:empty { display: none; }
 .warns p { margin: 0; font-size: 13px; color: var(--warn); font-weight: 600; }
-.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 input[type=file] { display: none; }
 
 /* fields */
@@ -136,7 +142,6 @@ input[type=file] { display: none; }
 .std .btns { display: flex; gap: 16px; }
 
 /* window maker */
-.wm[hidden] { display: none; }
 .wm { display: grid; gap: 16px; }
 .check { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; cursor: pointer; }
 .check input { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
@@ -149,9 +154,7 @@ input[type=file] { display: none; }
 .tplrow[hidden] { display: none; }
 
 /* job history */
-.hist[hidden] { display: none; }
 .hist { display: grid; gap: 12px; }
-.hlist { max-height: 440px; overflow-y: auto; margin-right: -6px; padding-right: 6px; }
 .hday { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .01em; padding: 14px 0 6px; }
 .hday:first-child { padding-top: 2px; }
 .hrow { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
@@ -162,10 +165,10 @@ input[type=file] { display: none; }
 .hrow .link { flex: none; }
 .hfoot { display: flex; justify-content: flex-end; }
 
-details { padding: 4px 4px 0; }
+details { padding: 0; }
 summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--muted); }
 pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui-monospace, "SFMono-Regular", Menlo, monospace; color: var(--muted);
-  white-space: pre-wrap; word-break: break-word; background: var(--card); border-radius: var(--r-md); padding: 12px; }
+  white-space: pre-wrap; word-break: break-word; background: var(--field); border-radius: var(--r-md); padding: 12px; }
 
 /* floating cut bar */
 .dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; pointer-events: none;
@@ -192,36 +195,47 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
 <body>
 <div class="wrap">
   <header>
-    <div class="brand">Cutter</div>
-    <div class="conn"><span class="dot" id="dot"></span><span id="connText">Not connected</span></div>
-    <button id="connectBtn" type="button" class="primary">Connect</button>
+    <div class="top">
+      <div class="brand">Cutter</div>
+      <div class="conn"><span class="dot" id="dot"></span><span id="connText">Not connected</span></div>
+      <button id="connectBtn" type="button" class="primary">Connect</button>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Sections" id="nav">
+      <button class="tab" role="tab" type="button" data-pane="cut" aria-selected="true">Cut</button>
+      <button class="tab" role="tab" type="button" data-pane="make" aria-selected="false">Make</button>
+      <button class="tab" role="tab" type="button" data-pane="history" aria-selected="false">History</button>
+      <button class="tab" role="tab" type="button" data-pane="settings" aria-selected="false">Settings</button>
+    </nav>
   </header>
 
+  <div class="pane" id="pane-cut">
+    <section class="card" aria-labelledby="hMat">
+      <div class="card-head"><h2 id="hMat">On the mat</h2><span class="sub" id="matName"></span></div>
+      <div class="mat"><svg id="matSvg" viewBox="0 0 304.8 304.8" role="img" aria-label="Cutting mat preview"></svg></div>
+      <div class="meta" id="meta"></div>
+      <div class="warns" id="warns"></div>
+      <div class="pick">
+        <div class="val"><select id="tpl" aria-label="Template"></select></div>
+        <button type="button" id="openBtn">Open file</button>
+        <input type="file" id="file" accept=".svg,image/svg+xml">
+      </div>
+      <div class="tplrow" id="tplRow" hidden><button type="button" class="link" id="tplDel">Delete this template</button></div>
+      <div class="std" id="sum"></div>
+      <div class="line"><span class="sub" id="posText"></span><button type="button" class="link" id="posToggle" aria-expanded="false" aria-controls="posRow">Move</button></div>
+      <div class="fields" id="posRow" hidden>
+        <div class="field"><label for="posX">From left edge</label>
+          <div class="val"><input id="posX" type="number" inputmode="decimal" step="1" min="0"><span class="unit">mm</span></div></div>
+        <div class="field"><label for="posY">From top edge</label>
+          <div class="val"><input id="posY" type="number" inputmode="decimal" step="1" min="0"><span class="unit">mm</span></div></div>
+      </div>
+    </section>
+  </div>
 
-  <section class="card" aria-labelledby="hMat">
-    <div class="card-head"><h2 id="hMat">On the mat</h2><span class="sub" id="matName"></span></div>
-    <div class="field"><label for="tpl">Template</label>
-      <div class="val"><select id="tpl"></select></div></div>
-    <div class="tplrow" id="tplRow" hidden><button type="button" class="link" id="tplDel">Delete this template</button></div>
-    <div class="mat"><svg id="matSvg" viewBox="0 0 304.8 304.8" role="img" aria-label="Cutting mat preview"></svg></div>
-    <div class="meta" id="meta"></div>
-    <div class="warns" id="warns"></div>
-    <div class="fields">
-      <div class="field"><label for="posX">From left edge</label>
-        <div class="val"><input id="posX" type="number" inputmode="decimal" step="1" min="0"><span class="unit">mm</span></div></div>
-      <div class="field"><label for="posY">From top edge</label>
-        <div class="val"><input id="posY" type="number" inputmode="decimal" step="1" min="0"><span class="unit">mm</span></div></div>
-    </div>
-    <div class="actions">
-      <button type="button" id="openBtn">Open SVG</button>
-      <button type="button" id="testBtn">Test square</button>
-      <input type="file" id="file" accept=".svg,image/svg+xml">
-    </div>
-  </section>
-
-  <section class="card" aria-labelledby="hWm">
-    <div class="card-head"><h2 id="hWm">Window maker</h2><button type="button" class="link" id="wmToggle" aria-expanded="false" aria-controls="wm">Open</button></div>
-    <div class="wm" id="wm" hidden>
+  <div class="pane" id="pane-make" hidden>
+    <section class="card" aria-labelledby="hWm">
+      <div class="card-head"><h2 id="hWm">Tape window</h2><button type="button" class="link" id="wmShow">Show on the mat</button></div>
+      <div class="mat"><svg id="wmPrev" viewBox="0 0 304.8 304.8" role="img" aria-label="Preview of what is on the mat"></svg></div>
+      <div class="wm" id="wm">
       <div class="tabs" role="tablist" aria-label="Which tape" id="wmTape">
         <button class="tab" role="tab" type="button" data-v="top">Top tape</button>
         <button class="tab" role="tab" type="button" data-v="bottom">Bottom tape</button>
@@ -265,23 +279,27 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
           <div class="val"><input id="wmName" type="text" autocomplete="off" placeholder="e.g. Kriah Neimah Clouds"></div></div>
         <button type="button" class="primary" id="wmSave">Save as template</button>
       </div>
-    </div>
-  </section>
-
-  <section class="card" aria-labelledby="hHist">
-    <div class="card-head"><h2 id="hHist">History</h2><span class="sub" id="histCount"></span><button type="button" class="link" id="histToggle" aria-expanded="false" aria-controls="hist">Open</button></div>
-    <div class="hist" id="hist" hidden>
-      <div class="tabs" role="tablist" aria-label="Show history" id="histView">
-        <button class="tab" role="tab" type="button" data-v="date" aria-selected="true">By date</button>
-        <button class="tab" role="tab" type="button" data-v="totals" aria-selected="false">Totals</button>
       </div>
-      <div class="hlist" id="histList"></div>
-      <div class="hfoot"><button type="button" class="link" id="histClear">Clear history</button></div>
-    </div>
-  </section>
+    </section>
+  </div>
 
-  <section class="card" aria-labelledby="hMaterial">
-    <div class="card-head"><h2 id="hMaterial">Settings</h2></div>
+  <div class="pane" id="pane-history" hidden>
+    <section class="card" aria-labelledby="hHist">
+      <div class="card-head"><h2 id="hHist">History</h2><span class="sub" id="histCount"></span></div>
+      <div class="hist" id="hist">
+        <div class="tabs" role="tablist" aria-label="Show history" id="histView">
+          <button class="tab" role="tab" type="button" data-v="date" aria-selected="true">By date</button>
+          <button class="tab" role="tab" type="button" data-v="totals" aria-selected="false">Totals</button>
+        </div>
+        <div class="hlist" id="histList"></div>
+        <div class="hfoot"><button type="button" class="link" id="histClear">Clear history</button></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="pane" id="pane-settings" hidden>
+    <section class="card" aria-labelledby="hMaterial">
+      <div class="card-head"><h2 id="hMaterial">Cut settings</h2></div>
     <div class="tabs" role="tablist" aria-label="Material" id="presetTabs"></div>
     <div class="std" id="std"></div>
     <div class="fields">
@@ -302,21 +320,25 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
       <div class="field" data-f="mat"><label for="mat">Mat</label>
         <div class="val"><select id="mat"><option value="cameo_12x12">12 × 12 in</option><option value="cameo_12x24">12 × 24 in</option><option value="no_mat">No mat (roll)</option></select></div></div>
     </div>
-  </section>
+    </section>
 
-  <section class="card" id="connectRow" aria-labelledby="hConn">
-    <div class="card-head"><h2 id="hConn">Connection</h2></div>
-    <div class="tabs" role="tablist" aria-label="Connect by">
-      <button class="tab" role="tab" id="viaBle" aria-selected="true" type="button">Bluetooth</button>
-      <button class="tab" role="tab" id="viaUsb" aria-selected="false" type="button">USB cable</button>
-    </div>
-    <p class="note" id="connNote">Turn the Cameo on and close Silhouette Studio or Silhouette Go on any device, then tap Connect.</p>
-  </section>
+    <section class="card" id="connectRow" aria-labelledby="hConn">
+      <div class="card-head"><h2 id="hConn">Connection</h2></div>
+      <div class="tabs" role="tablist" aria-label="Connect by">
+        <button class="tab" role="tab" id="viaBle" aria-selected="true" type="button">Bluetooth</button>
+        <button class="tab" role="tab" id="viaUsb" aria-selected="false" type="button">USB cable</button>
+      </div>
+      <p class="note" id="connNote">Turn the Cameo on and close Silhouette Studio or Silhouette Go on any device, then tap Connect.</p>
+    </section>
 
-  <details>
-    <summary>Details</summary>
-    <pre class="log" id="log"></pre>
-  </details>
+    <section class="card" aria-labelledby="hTest">
+      <div class="card-head"><h2 id="hTest">Test cut</h2><button type="button" class="link" id="testBtn">Put a test square on the mat</button></div>
+      <details>
+        <summary>Activity log</summary>
+        <pre class="log" id="log"></pre>
+      </details>
+    </section>
+  </div>
 </div>
 
 <div class="dock">
@@ -1422,7 +1444,8 @@ function renderMat() {
   $('matName').textContent = MATS[S.work.mat]?.w ? `${MATS[S.work.mat].w} × ${MATS[S.work.mat].h} in mat` : 'No mat';
   if (!S.design) {
     const t = el('text', { class: 'empty', x: W / 2, y: H / 2, 'text-anchor': 'middle' }, svg);
-    t.textContent = 'Open an SVG or tap Test square';
+    t.textContent = 'Pick a template or open a file';
+    $('wmPrev').setAttribute('viewBox', svg.getAttribute('viewBox')); $('wmPrev').innerHTML = svg.innerHTML;
     return;
   }
   const g = el('g', { class: 'cut' }, svg);
@@ -1431,15 +1454,17 @@ function renderMat() {
   }
   const first = jobPaths()[0];
   if (first) el('circle', { class: 'start', cx: first[0][0], cy: first[0][1], r: 1.8 }, svg);
+  $('wmPrev').setAttribute('viewBox', svg.getAttribute('viewBox')); $('wmPrev').innerHTML = svg.innerHTML;
 }
 
 function renderMeta() {
   const m = $('meta'), w = $('warns');
   m.replaceChildren(); w.replaceChildren();
+  $('hMat').textContent = S.design ? S.design.name : 'On the mat';
+  renderPos();
   if (!S.design) return;
   const d = S.design;
   const add = (label, value) => { const s = document.createElement('span'); s.append(label ? label + ' ' : ''); const b = document.createElement('b'); b.textContent = value; s.append(b); m.appendChild(s); };
-  add('', d.name);
   add('Size', `${d.w.toFixed(1)} × ${d.h.toFixed(1)} mm`);
   add('Lines', String(d.paths.length));
   const [W, H] = matSize();
@@ -1487,6 +1512,30 @@ function renderFields() {
     txt.append('Using your ', Object.assign(document.createElement('b'), { textContent: `${st.name} standard` }), '. Tap the tab any time to get it back.');
   }
   box.append(txt, btns);
+  // the same thing in one line on the Cut tab
+  const sum = $('sum');
+  sum.replaceChildren();
+  sum.className = 'std' + (diff.length ? ' dirty' : '');
+  const line = document.createElement('div'); line.className = 'txt';
+  const nm = document.createElement('b'); nm.textContent = st.name;
+  const bits = [S.work.tool === 'autoblade' ? `depth ${S.work.depth}` : show('tool', S.work.tool).toLowerCase(), `force ${S.work.force}`, `speed ${S.work.speed}`];
+  if (+S.work.passes > 1) bits.push(`${S.work.passes} passes`);
+  line.append(nm, ' · ' + bits.join(' · ') + (diff.length ? ' · changed for this cut' : ''));
+  const chg = document.createElement('button'); chg.type = 'button'; chg.className = 'link'; chg.textContent = 'Change'; chg.onclick = () => showPane('settings');
+  sum.append(line, chg);
+}
+
+function renderPos() {
+  $('posText').textContent = S.design ? `${round1(S.pos[0])} mm from the left, ${round1(S.pos[1])} mm from the top` : '';
+  $('posToggle').hidden = !S.design;
+  if (!S.design) { $('posRow').hidden = true; $('posToggle').textContent = 'Move'; }
+}
+
+// ------------------------------------------------------------- tabs
+function showPane(id) {
+  for (const b of $('nav').children) b.setAttribute('aria-selected', String(b.dataset.pane === id));
+  for (const n of document.querySelectorAll('.pane')) n.hidden = n.id !== 'pane-' + id;
+  window.scrollTo({ top: 0 });
 }
 
 function renderAll() {
@@ -1503,7 +1552,7 @@ function updateCut() {
   b.textContent = 'Cut';
   b.disabled = !(S.design && S.cutter) || !!S.unloading;
   if (S.design && !S.cutter && !$('dockMsg').classList.contains('bad')) dock('Connect the cutter to cut');
-  if (!S.design && S.cutter) dock('Load a design to start');
+  if (!S.design && S.cutter && !S.unloading) dock('Pick a template or open a file');
 }
 
 // ------------------------------------------------------------- cut
@@ -1602,7 +1651,7 @@ function cutAgain(j) {
   S.pos = [...j.pos];
   renderAll();
   dock(S.cutter ? 'Ready to cut, same as before' : 'Job loaded. Connect the cutter to cut.', 'good');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  showPane('cut');
 }
 function renderHist() {
   const done = hist.jobs.filter((j) => j.result === 'done').length;
@@ -1641,12 +1690,6 @@ function renderHist() {
     list.append(row(time, j.name, sub, j));
   }
 }
-$('histToggle').onclick = () => {
-  const open = $('hist').hidden;
-  $('hist').hidden = !open;
-  $('histToggle').textContent = open ? 'Close' : 'Open';
-  $('histToggle').setAttribute('aria-expanded', String(open));
-};
 for (const b of $('histView').children) b.onclick = () => {
   histView = b.dataset.v;
   for (const x of $('histView').children) x.setAttribute('aria-selected', String(x === b));
@@ -1674,7 +1717,14 @@ $('viaUsb').onclick = () => setVia('usb');
 $('connectBtn').onclick = () => connect();
 $('cutBtn').onclick = cut;
 $('openBtn').onclick = () => $('file').click();
-$('testBtn').onclick = testDesign;
+$('testBtn').onclick = () => { testDesign(); showPane('cut'); };
+for (const b of $('nav').children) b.onclick = () => showPane(b.dataset.pane);
+$('posToggle').onclick = () => {
+  const open = $('posRow').hidden;
+  $('posRow').hidden = !open;
+  $('posToggle').textContent = open ? 'Done' : 'Move';
+  $('posToggle').setAttribute('aria-expanded', String(open));
+};
 $('file').onchange = async (e) => {
   const f = e.target.files[0];
   if (!f) return;
@@ -1733,7 +1783,7 @@ $('tplDel').onclick = () => {
   mine = mine.filter((x) => x !== t);
   store.set(MINE_KEY, mine);
   log(`Deleted template ${t.name}`);
-  testDesign();
+  S.design = null; renderAll();
 };
 
 // ------------------------------------------------------------- window maker
@@ -1801,13 +1851,7 @@ function applyMaker() {
   catch (e) { dock(e.message, 'bad'); }
 }
 
-$('wmToggle').onclick = () => {
-  const open = $('wm').hidden;
-  $('wm').hidden = !open;
-  $('wmToggle').textContent = open ? 'Close' : 'Open';
-  $('wmToggle').setAttribute('aria-expanded', String(open));
-  if (open) applyMaker();
-};
+$('wmShow').onclick = applyMaker;
 for (const [id, k] of Object.entries(WNUM)) $(id).oninput = () => {
   const v = parseFloat($(id).value);
   if (!Number.isFinite(v) || v < 0) return;
@@ -1871,7 +1915,6 @@ async function loadFromLink() {
   } catch (e) {
     log('Could not open the design in this link: ' + e.message);
     dock('That design link is broken. Ask Claude to send it again.', 'bad');
-    if (!S.design) testDesign();
   }
   return true;
 }
@@ -1880,7 +1923,7 @@ window.addEventListener('hashchange', loadFromLink);
 setVia(S.via);
 setConn();
 dock('Connect the cutter to cut');
-if (!linkDesign()) testDesign();
+renderAll();
 loadFromLink();
 autoConnectUsb();
 </script>
