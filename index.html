@@ -133,6 +133,19 @@ input[type=file] { display: none; }
 .std.dirty { background: var(--accent-soft); }
 .std .btns { display: flex; gap: 16px; }
 
+/* window maker */
+.wm[hidden] { display: none; }
+.wm { display: grid; gap: 16px; }
+.check { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; cursor: pointer; }
+.check input { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
+.group { display: grid; gap: 10px; }
+.group > .lbl { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .01em; display: flex; justify-content: space-between; align-items: baseline; }
+.group > .lbl .link { padding: 0; font-size: 12px; }
+.val input[type=text] { font-weight: 700; font-size: 15px; }
+.saverow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.tplrow { display: flex; justify-content: flex-end; margin-top: -8px; }
+.tplrow[hidden] { display: none; }
+
 details { padding: 4px 4px 0; }
 summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--muted); }
 pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui-monospace, "SFMono-Regular", Menlo, monospace; color: var(--muted);
@@ -171,6 +184,7 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
     <div class="card-head"><h2 id="hMat">On the mat</h2><span class="sub" id="matName"></span></div>
     <div class="field"><label for="tpl">Template</label>
       <div class="val"><select id="tpl"></select></div></div>
+    <div class="tplrow" id="tplRow" hidden><button type="button" class="link" id="tplDel">Delete this template</button></div>
     <div class="mat"><svg id="matSvg" viewBox="0 0 304.8 304.8" role="img" aria-label="Cutting mat preview"></svg></div>
     <div class="meta" id="meta"></div>
     <div class="warns" id="warns"></div>
@@ -184,6 +198,55 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
       <button type="button" id="openBtn">Open SVG</button>
       <button type="button" id="testBtn">Test square</button>
       <input type="file" id="file" accept=".svg,image/svg+xml">
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="hWm">
+    <div class="card-head"><h2 id="hWm">Window maker</h2><button type="button" class="link" id="wmToggle" aria-expanded="false" aria-controls="wm">Open</button></div>
+    <div class="wm" id="wm" hidden>
+      <div class="tabs" role="tablist" aria-label="Which tape" id="wmTape">
+        <button class="tab" role="tab" type="button" data-v="top">Top tape</button>
+        <button class="tab" role="tab" type="button" data-v="bottom">Bottom tape</button>
+        <button class="tab" role="tab" type="button" data-v="both">Both tapes</button>
+      </div>
+      <label class="check"><input type="checkbox" id="wmTrim"> Trim to a 3-inch tape</label>
+      <div class="fields" id="wmTrimRow">
+        <div class="field"><label for="wmTrimUp">Trim line up from tape bottom</label>
+          <div class="val"><input id="wmTrimUp" type="number" inputmode="decimal" step="0.5" min="1"><span class="unit">mm</span></div></div>
+      </div>
+      <div class="fields">
+        <div class="field"><label for="wmW">Window width</label>
+          <div class="val"><input id="wmW" type="number" inputmode="decimal" step="0.5" min="1"><span class="unit">mm</span></div></div>
+        <div class="field"><label for="wmH">Window height</label>
+          <div class="val"><input id="wmH" type="number" inputmode="decimal" step="0.5" min="1"><span class="unit">mm</span></div></div>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Along the tape" id="wmAlong">
+        <button class="tab" role="tab" type="button" data-v="centre">Centred</button>
+        <button class="tab" role="tab" type="button" data-v="left">From the left end</button>
+      </div>
+      <div class="fields" id="wmLeftRow">
+        <div class="field"><label for="wmLeft">From left end of tape</label>
+          <div class="val"><input id="wmLeft" type="number" inputmode="decimal" step="0.5" min="10"><span class="unit">mm</span></div></div>
+      </div>
+      <div class="group">
+        <div class="lbl"><span>Corner rounding</span><button type="button" class="link" id="wmSame">Make all like top left</button></div>
+        <div class="fields">
+          <div class="field"><label for="wmTL">Top left</label>
+            <div class="val"><input id="wmTL" type="number" inputmode="decimal" step="0.5" min="0"><span class="unit">mm</span></div></div>
+          <div class="field"><label for="wmTR">Top right</label>
+            <div class="val"><input id="wmTR" type="number" inputmode="decimal" step="0.5" min="0"><span class="unit">mm</span></div></div>
+          <div class="field"><label for="wmBL">Bottom left</label>
+            <div class="val"><input id="wmBL" type="number" inputmode="decimal" step="0.5" min="0"><span class="unit">mm</span></div></div>
+          <div class="field"><label for="wmBR">Bottom right</label>
+            <div class="val"><input id="wmBR" type="number" inputmode="decimal" step="0.5" min="0"><span class="unit">mm</span></div></div>
+        </div>
+      </div>
+      <p class="note" id="wmNote"></p>
+      <div class="saverow">
+        <div class="field"><label for="wmName">Template name</label>
+          <div class="val"><input id="wmName" type="text" autocomplete="off" placeholder="e.g. Kriah Neimah Clouds"></div></div>
+        <button type="button" class="primary" id="wmSave">Save as template</button>
+      </div>
     </div>
   </section>
 
@@ -1470,23 +1533,144 @@ $('tool').onchange = () => { S.work.tool = $('tool').value; renderFields(); };
 $('holder').onchange = () => { S.work.holder = +$('holder').value; renderFields(); };
 $('mat').onchange = () => { S.work.mat = $('mat').value; renderFields(); renderMat(); renderMeta(); };
 
-// Templates dropdown
+// Templates dropdown: the built-in ones above, plus ones saved on this phone from the Window maker
+const MINE_KEY = 'cutter.templates.mine';
+let mine = store.get(MINE_KEY, []);
+if (!Array.isArray(mine)) mine = [];
+const allTemplates = () => [...TEMPLATES, ...mine];
 function renderTemplates() {
   const sel = $('tpl');
-  sel.replaceChildren(new Option('Choose a template', ''), ...[...TEMPLATES].sort((a, b) => a.name.localeCompare(b.name)).map((t) => new Option(t.name, t.id)));
-  const cur = TEMPLATES.find((t) => S.design && t.name === S.design.name);
+  sel.replaceChildren(new Option('Choose a template', ''), ...allTemplates().sort((a, b) => a.name.localeCompare(b.name)).map((t) => new Option(t.name, t.id)));
+  const cur = allTemplates().find((t) => S.design && t.name === S.design.name);
   sel.value = cur ? cur.id : '';
+  $('tplRow').hidden = !(cur && cur.mine);
 }
 $('tpl').onchange = () => {
-  const t = TEMPLATES.find((x) => x.id === $('tpl').value);
+  const t = allTemplates().find((x) => x.id === $('tpl').value);
   if (!t) return;
   const m = S.standards.find((x) => x.id === t.material);
   if (m) { S.presetId = m.id; store.set('cutter.preset.v2', m.id); S.work = pick(m); }
   try {
+    if (t.params) { Object.assign(W, t.params); fillMaker(); }
     loadSvgText(t.svg, t.name);
     dock(S.cutter ? 'Ready to cut' : 'Template loaded. Connect the cutter to cut.', 'good');
   } catch (e) { dock(e.message, 'bad'); }
 };
+$('tplDel').onclick = () => {
+  const t = mine.find((x) => x.id === $('tpl').value);
+  if (!t || !confirm(`Delete the template "${t.name}"?`)) return;
+  mine = mine.filter((x) => x !== t);
+  store.set(MINE_KEY, mine);
+  log(`Deleted template ${t.name}`);
+  testDesign();
+};
+
+// ------------------------------------------------------------- window maker
+// Windows on his 4" tape (101.6 mm): top tape runs along the top of the 12 × 12 mat grid,
+// bottom tape along the bottom. "Trim to 3 in" cuts a line across the tape a set distance
+// up from its bottom edge, and the window is centred in what's left above that line.
+const TAPE = 101.6, MAT = 304.8, EDGE = 10;
+const W_KEY = 'cutter.windowmaker';
+const W = Object.assign({ tape: 'top', trim: false, trimUp: 25.4, w: 110, h: 10, along: 'centre', left: 38.1, tl: 3, tr: 3, bl: 3, br: 3 }, store.get(W_KEY, {}));
+const WNUM = { wmTrimUp: 'trimUp', wmW: 'w', wmH: 'h', wmLeft: 'left', wmTL: 'tl', wmTR: 'tr', wmBL: 'bl', wmBR: 'br' };
+const f2 = (v) => +(+v).toFixed(2);
+
+function windowPath(x, y, w, h, r) {
+  const m = Math.min(w, h) / 2;
+  const [tl, tr, br, bl] = [r.tl, r.tr, r.br, r.bl].map((v) => Math.max(0, Math.min(m, +v || 0)));
+  const arc = (rad, ex, ey) => (rad ? `A${f2(rad)} ${f2(rad)} 0 0 1 ${f2(ex)} ${f2(ey)}` : '');
+  return `M${f2(x + tl)} ${f2(y)}H${f2(x + w - tr)}${arc(tr, x + w, y + tr)}V${f2(y + h - br)}${arc(br, x + w - br, y + h)}`
+    + `H${f2(x + bl)}${arc(bl, x, y + h - bl)}V${f2(y + tl)}${arc(tl, x + tl, y)}Z`;
+}
+
+function makerSvg() {
+  const parts = [], problems = [];
+  const w = +W.w, h = +W.h;
+  if (!(w > 0 && h > 0)) return { problems: ['Enter the window width and height.'] };
+  const x = W.along === 'left' ? +W.left : (MAT - w) / 2;
+  if (x < EDGE || x + w > MAT - EDGE) problems.push('The window runs past the ends of the tape. Make it narrower or move it.');
+  for (const tape of W.tape === 'both' ? ['top', 'bottom'] : [W.tape]) {
+    const top = tape === 'top' ? 0 : MAT - TAPE;
+    let bottom = top + TAPE;
+    if (W.trim) {
+      bottom -= +W.trimUp;
+      parts.push(`<line x1="${EDGE}" y1="${f2(bottom)}" x2="${MAT - EDGE}" y2="${f2(bottom)}"/>`);
+    }
+    const y = (top + bottom) / 2 - h / 2;
+    if (h > bottom - top) problems.push('The window is taller than the tape' + (W.trim ? ' above the trim line.' : '.'));
+    parts.push(`<path d="${windowPath(x, y, w, h, W)}"/>`);
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="304.8mm" height="304.8mm" viewBox="0 0 304.8 304.8"><g fill="none" stroke="#000" stroke-width="0.3">${parts.join('')}</g></svg>`;
+  return { svg, problems };
+}
+
+function makerName() {
+  return `Window ${f2(W.w)} × ${f2(W.h)} mm`;
+}
+
+function fillMaker() {
+  for (const [id, k] of Object.entries(WNUM)) $(id).value = W[k];
+  $('wmTrim').checked = !!W.trim;
+  $('wmTrimRow').hidden = !W.trim;
+  $('wmLeftRow').hidden = W.along !== 'left';
+  for (const b of $('wmTape').children) b.setAttribute('aria-selected', String(b.dataset.v === W.tape));
+  for (const b of $('wmAlong').children) b.setAttribute('aria-selected', String(b.dataset.v === W.along));
+}
+
+function applyMaker() {
+  store.set(W_KEY, W);
+  fillMaker();
+  const r = makerSvg();
+  const note = $('wmNote');
+  note.textContent = r.problems.join(' ');
+  note.className = 'note' + (r.problems.length ? ' bad' : '');
+  $('wmSave').disabled = !r.svg || r.problems.length > 0;
+  if (!r.svg) return;
+  try { loadSvgText(r.svg, makerName()); dock(S.cutter ? 'Ready to cut' : 'Window on the mat. Connect the cutter to cut.', 'good'); }
+  catch (e) { dock(e.message, 'bad'); }
+}
+
+$('wmToggle').onclick = () => {
+  const open = $('wm').hidden;
+  $('wm').hidden = !open;
+  $('wmToggle').textContent = open ? 'Close' : 'Open';
+  $('wmToggle').setAttribute('aria-expanded', String(open));
+  if (open) applyMaker();
+};
+for (const [id, k] of Object.entries(WNUM)) $(id).oninput = () => {
+  const v = parseFloat($(id).value);
+  if (!Number.isFinite(v) || v < 0) return;
+  W[k] = v;
+  store.set(W_KEY, W);
+  const r = makerSvg();
+  $('wmNote').textContent = r.problems.join(' ');
+  $('wmNote').className = 'note' + (r.problems.length ? ' bad' : '');
+  $('wmSave').disabled = !r.svg || r.problems.length > 0;
+  if (r.svg) { try { loadSvgText(r.svg, makerName()); } catch {} }
+};
+$('wmTrim').onchange = () => { W.trim = $('wmTrim').checked; applyMaker(); };
+for (const [box, key] of [['wmTape', 'tape'], ['wmAlong', 'along']]) {
+  for (const b of $(box).children) b.onclick = () => { W[key] = b.dataset.v; applyMaker(); };
+}
+$('wmSame').onclick = () => { W.tr = W.bl = W.br = W.tl; applyMaker(); };
+$('wmSave').onclick = () => {
+  const name = $('wmName').value.trim();
+  if (!name) { $('wmNote').textContent = 'Give the template a name first.'; $('wmNote').className = 'note bad'; $('wmName').focus(); return; }
+  const r = makerSvg();
+  if (!r.svg || r.problems.length) return;
+  const old = allTemplates().find((t) => t.name.toLowerCase() === name.toLowerCase());
+  if (old && !old.mine) { $('wmNote').textContent = 'There is already a built-in template with that name. Pick another name.'; $('wmNote').className = 'note bad'; return; }
+  if (old && !confirm(`Replace your template "${old.name}"?`)) return;
+  const t = { id: old ? old.id : 'mine-' + Date.now(), name, material: S.presetId, svg: r.svg, params: { ...W }, mine: true };
+  mine = old ? mine.map((x) => (x === old ? t : x)) : [...mine, t];
+  store.set(MINE_KEY, mine);
+  $('wmName').value = '';
+  loadSvgText(t.svg, t.name);
+  $('wmNote').textContent = `Saved "${name}". It's in the Template list now.`;
+  $('wmNote').className = 'note';
+  log(`Saved template ${name}`);
+};
+fillMaker();
 
 // Designs arrive in the link itself: #d=<deflate-raw, base64url SVG>&n=<name>
 // (made by the Cameo design skill), or ?svg=<url> for a hosted file.
