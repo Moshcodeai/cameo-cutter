@@ -74,6 +74,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2.5px
 /* cards */
 .card { background: var(--card); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 18px; display: grid; gap: 16px; min-width: 0; }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.card-head .sub { flex: 1; }
+.card-head h2 + .sub:last-child { flex: none; }
 h2 { margin: 0; font: 700 19px/1.1 var(--display); letter-spacing: -.01em; }
 .sub { font-size: 13px; color: var(--muted); }
 
@@ -140,6 +142,20 @@ input[type=file] { display: none; }
 .tplrow { display: flex; justify-content: flex-end; margin-top: -8px; }
 .tplrow[hidden] { display: none; }
 
+/* job history */
+.hist[hidden] { display: none; }
+.hist { display: grid; gap: 12px; }
+.hlist { max-height: 440px; overflow-y: auto; margin-right: -6px; padding-right: 6px; }
+.hday { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .01em; padding: 14px 0 6px; }
+.hday:first-child { padding-top: 2px; }
+.hrow { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.hrow .t { flex: none; width: 42px; font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hrow .n { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.hrow .n b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hrow .n span { font-size: 12px; color: var(--muted); }
+.hrow .link { flex: none; }
+.hfoot { display: flex; justify-content: flex-end; }
+
 details { padding: 4px 4px 0; }
 summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--muted); }
 pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui-monospace, "SFMono-Regular", Menlo, monospace; color: var(--muted);
@@ -157,7 +173,9 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
 .dock .msg { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--muted); }
 .dock .msg.bad { color: var(--bad); }
 .dock .msg.good { color: var(--ok); }
-.dock button.primary { min-width: 128px; padding: 17px 26px; font: 800 17px/1 var(--display); letter-spacing: .01em; border-radius: 18px; }
+.dock button.soft { padding: 17px 16px; border-radius: 18px; white-space: nowrap; }
+.dock button.soft[hidden] { display: none; }
+.dock button.primary { min-width: 112px; padding: 17px 26px; font: 800 17px/1 var(--display); letter-spacing: .01em; border-radius: 18px; }
 .bar { height: 4px; background: var(--line); border-radius: 4px; overflow: hidden; }
 .bar[hidden] { display: none; }
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 4px; transition: width .25s; }
@@ -242,6 +260,18 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
     </div>
   </section>
 
+  <section class="card" aria-labelledby="hHist">
+    <div class="card-head"><h2 id="hHist">History</h2><span class="sub" id="histCount"></span><button type="button" class="link" id="histToggle" aria-expanded="false" aria-controls="hist">Open</button></div>
+    <div class="hist" id="hist" hidden>
+      <div class="tabs" role="tablist" aria-label="Show history" id="histView">
+        <button class="tab" role="tab" type="button" data-v="date" aria-selected="true">By date</button>
+        <button class="tab" role="tab" type="button" data-v="totals" aria-selected="false">Totals</button>
+      </div>
+      <div class="hlist" id="histList"></div>
+      <div class="hfoot"><button type="button" class="link" id="histClear">Clear history</button></div>
+    </div>
+  </section>
+
   <section class="card" aria-labelledby="hMaterial">
     <div class="card-head"><h2 id="hMaterial">Settings</h2></div>
     <div class="tabs" role="tablist" aria-label="Material" id="presetTabs"></div>
@@ -286,6 +316,7 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
     <div class="bar" id="bar" aria-hidden="true" hidden><i id="barFill"></i></div>
     <div class="row">
       <div class="msg" id="dockMsg">Load a design to start</div>
+      <button class="soft" type="button" id="unloadBtn" hidden>Unload mat</button>
       <button class="primary" type="button" id="cutBtn" disabled>Cut</button>
     </div>
   </div>
@@ -650,10 +681,12 @@ function renderAll() {
 }
 
 function updateCut() {
-  const b = $('cutBtn');
+  const b = $('cutBtn'), u = $('unloadBtn');
+  u.hidden = !S.cutter || S.busy;
+  u.disabled = !!S.unloading;
   if (S.busy) { b.textContent = 'Stop'; b.disabled = false; return; }
   b.textContent = 'Cut';
-  b.disabled = !(S.design && S.cutter);
+  b.disabled = !(S.design && S.cutter) || !!S.unloading;
   if (S.design && !S.cutter && !$('dockMsg').classList.contains('bad')) dock('Connect the cutter to cut');
   if (!S.design && S.cutter) dock('Load a design to start');
 }
@@ -683,7 +716,8 @@ async function cut() {
       },
     );
     if (res.clipped) log(`${res.clipped} points were outside the cutting area and skipped`);
-    dock(S.stop ? 'Stopped. Press the unload button on the Cameo once.' : 'Done. The mat is back at the start: press unload once.', S.stop ? '' : 'good');
+    recordJob(S.stop ? 'stopped' : 'done', paths.length);
+    dock(S.stop ? 'Stopped early' : 'Done', S.stop ? '' : 'good');
     $('barFill').style.width = '100%';
   } catch (e) {
     log('Cut failed: ' + e.message);
@@ -694,7 +728,123 @@ async function cut() {
   }
 }
 
+// ------------------------------------------------------------- unload
+// The unload command is sent, then the Cameo is asked whether the mat really went:
+// if it says no, he is told to use the button on the machine.
+async function unloadMat() {
+  if (!S.cutter || S.busy || S.unloading) return;
+  S.unloading = true; updateCut();
+  dock('Unloading the mat…');
+  try {
+    const ok = await S.cutter.unload();
+    dock(ok ? 'Mat unloaded' : "Didn't unload. Use the button on the Cameo.", ok ? 'good' : 'bad');
+  } catch (e) {
+    log('Unload failed: ' + e.message);
+    dock('Unload failed. Use the button on the Cameo.', 'bad');
+  } finally { S.unloading = false; updateCut(); }
+}
+
+// ------------------------------------------------------------- job history
+// Every cut is kept on this phone: when, what, where on the mat and with which settings,
+// so any past job can be put back on the mat exactly as it was. Each design's lines are
+// stored once (by a hash of the lines) however many times it has been cut.
+const H_KEY = 'cutter.history.v1', H_MAX = 500;
+let hist = store.get(H_KEY, null);
+if (!hist || !Array.isArray(hist.jobs) || !hist.designs) hist = { jobs: [], designs: {} };
+let histView = 'date';
+function designKey(paths) {
+  const s = JSON.stringify(paths);
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36) + '-' + s.length.toString(36);
+}
+function saveHist() {
+  const prune = () => { const used = new Set(hist.jobs.map((j) => j.key)); for (const k in hist.designs) if (!used.has(k)) delete hist.designs[k]; };
+  if (hist.jobs.length > H_MAX) hist.jobs.splice(0, hist.jobs.length - H_MAX);
+  prune();
+  for (;;) {
+    try { localStorage.setItem(H_KEY, JSON.stringify(hist)); return; }
+    catch { if (hist.jobs.length <= 1) return; hist.jobs.splice(0, Math.ceil(hist.jobs.length / 10)); prune(); } // phone storage full: drop the oldest
+  }
+}
+function recordJob(result, lines) {
+  try {
+    const d = S.design;
+    const paths = d.paths.map((p) => p.map(([x, y]) => [Math.round(x * 100) / 100, Math.round(y * 100) / 100]));
+    const key = designKey(paths);
+    hist.designs[key] = { paths, w: d.w, h: d.h };
+    hist.jobs.push({ id: Date.now(), t: Date.now(), name: d.name, key, pos: [...S.pos], preset: S.presetId, presetName: standard().name, work: { ...S.work }, changed: changed().length > 0, result, lines });
+    saveHist(); renderHist();
+  } catch (e) { log('Could not save this job to the history: ' + e.message); }
+}
+function cutAgain(j) {
+  const d = hist.designs[j.key];
+  if (!d) return;
+  const m = S.standards.find((x) => x.id === j.preset);
+  if (m) { S.presetId = m.id; store.set('cutter.preset.v2', m.id); }
+  S.work = { ...pick(standard()), ...j.work };
+  S.design = { name: j.name, paths: d.paths, w: d.w, h: d.h, warnings: [] };
+  S.pos = [...j.pos];
+  renderAll();
+  dock(S.cutter ? 'Ready to cut, same as before' : 'Job loaded. Connect the cutter to cut.', 'good');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function renderHist() {
+  const done = hist.jobs.filter((j) => j.result === 'done').length;
+  $('histCount').textContent = hist.jobs.length ? `${done} cut${done === 1 ? '' : 's'}` : '';
+  const list = $('histList');
+  list.replaceChildren();
+  $('histClear').hidden = !hist.jobs.length;
+  if (!hist.jobs.length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = 'Nothing yet. Every cut from now on is listed here.'; list.append(p); return; }
+  const div = (cls, text) => { const e = document.createElement('div'); e.className = cls; if (text != null) e.textContent = text; return e; };
+  const row = (left, title, sub, j) => {
+    const r = div('hrow'), n = div('n');
+    const b = document.createElement('b'); b.textContent = title;
+    const s = document.createElement('span'); s.textContent = sub;
+    n.append(b, s);
+    const again = document.createElement('button'); again.type = 'button'; again.className = 'link'; again.textContent = 'Cut again';
+    again.onclick = () => cutAgain(j);
+    if (left != null) r.append(div('t', left));
+    r.append(n, again);
+    return r;
+  };
+  const year = new Date().getFullYear();
+  const dayName = (t, long) => { const d = new Date(t); return d.toLocaleDateString('en-GB', { weekday: long ? 'long' : undefined, day: 'numeric', month: long ? 'long' : 'short', ...(d.getFullYear() !== year ? { year: 'numeric' } : {}) }); };
+  if (histView === 'totals') {
+    const by = new Map();
+    for (const j of hist.jobs) { if (j.result !== 'done') continue; const g = by.get(j.name) || { n: 0, last: j }; g.n++; g.last = j; by.set(j.name, g); }
+    if (!by.size) { const p = document.createElement('p'); p.className = 'note'; p.textContent = 'No finished cuts yet.'; list.append(p); return; }
+    for (const [name, g] of [...by].sort((a, b) => b[1].last.t - a[1].last.t)) list.append(row(null, name, `${g.n} cut${g.n === 1 ? '' : 's'} · last on ${dayName(g.last.t, false)}`, g.last));
+    return;
+  }
+  let day = '';
+  for (const j of [...hist.jobs].reverse()) {
+    const d = dayName(j.t, true);
+    if (d !== day) { day = d; list.append(div('hday', d)); }
+    const time = new Date(j.t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const sub = [j.presetName + (j.changed ? ' (changed)' : ''), j.result === 'stopped' ? 'stopped early' : null].filter(Boolean).join(' · ');
+    list.append(row(time, j.name, sub, j));
+  }
+}
+$('histToggle').onclick = () => {
+  const open = $('hist').hidden;
+  $('hist').hidden = !open;
+  $('histToggle').textContent = open ? 'Close' : 'Open';
+  $('histToggle').setAttribute('aria-expanded', String(open));
+};
+for (const b of $('histView').children) b.onclick = () => {
+  histView = b.dataset.v;
+  for (const x of $('histView').children) x.setAttribute('aria-selected', String(x === b));
+  renderHist();
+};
+$('histClear').onclick = () => {
+  if (!confirm('Clear the whole job history on this phone?')) return;
+  hist = { jobs: [], designs: {} }; saveHist(); renderHist();
+};
+renderHist();
+
 // ------------------------------------------------------------- wiring
+$('unloadBtn').onclick = unloadMat;
 function setVia(v) {
   S.via = v; store.set('cutter.via', v);
   $('viaBle').setAttribute('aria-selected', String(v === 'ble'));

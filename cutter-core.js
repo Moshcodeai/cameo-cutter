@@ -731,6 +731,23 @@ export class Cutter {
     return s;
   }
 
+  /**
+   * Feed the mat out from the app instead of pressing unload on the machine.
+   * FO0 is the old Silhouette "feed the page out" command; it is not in the Python
+   * driver and was unconfirmed on the Cameo 5 when added (10 Nov 2026), so the
+   * result is checked: true only once the machine itself reports no mat loaded.
+   */
+  async unload(timeout = 12000) {
+    if ((await this.status()) === 'unloaded') return true;
+    await this.send('FO0');
+    const end = Date.now() + timeout;
+    await sleep(400);
+    let s = await this.status();
+    while (s !== 'unloaded' && Date.now() < end) { await sleep(250); s = await this.status(); }
+    this.log(`After unload command: ${s}`);
+    return s === 'unloaded';
+  }
+
   async identify() {
     const fw = await this.version();
     this.firmware = fw;
