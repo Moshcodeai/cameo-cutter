@@ -683,7 +683,7 @@ async function cut() {
       },
     );
     if (res.clipped) log(`${res.clipped} points were outside the cutting area and skipped`);
-    dock(S.stop ? 'Stopped. Press the unload button on the Cameo.' : 'Done. Press the unload button on the Cameo.', S.stop ? '' : 'good');
+    dock(S.stop ? 'Stopped. Press the unload button on the Cameo once.' : 'Done. The mat is back at the start: press unload once.', S.stop ? '' : 'good');
     $('barFill').style.width = '100%';
   } catch (e) {
     log('Cut failed: ' + e.message);

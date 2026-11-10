@@ -781,6 +781,10 @@ export class Cutter {
     try { await this.waitReady(120000, 50); } catch {}
     const endPosition = job.endPosition || (s.mat === 'no_mat' ? 'below' : 'start');
     await this.send(endCommands(plot.bbox, job.endOffset || 0, endPosition));
+    // wait until the mat is fully back before saying Done: pressing unload while it is
+    // still travelling back gets swallowed, and then it needs a second press
+    await sleep(300);
+    try { await this.waitReady(60000, 100); } catch {}
     return { clipped: plot.clipped, bbox: plot.bbox };
   }
 }
