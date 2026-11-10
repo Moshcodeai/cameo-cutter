@@ -144,6 +144,8 @@ input[type=file] { display: none; }
 
 /* window maker */
 .wm { display: grid; gap: 16px; }
+#wmBothRow { display: grid; gap: 16px; }
+#wmBothRow[hidden] { display: none; }
 .check { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; cursor: pointer; }
 .check input { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
 .group { display: grid; gap: 10px; }
@@ -248,10 +250,19 @@ pre.log { margin: 10px 0 0; max-height: 240px; overflow: auto; font: 12px/1.5 ui
           <div class="val"><input id="wmTapeW" type="number" inputmode="decimal" step="any" min="0"><select class="usel" data-u="wmTapeW" aria-label="Unit"><option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option></select></div></div>
       </div>
       <div class="fields">
-        <div class="field"><label for="wmW">Window width</label>
+        <div class="field"><label for="wmW" id="wmWLbl">Window width</label>
           <div class="val"><input id="wmW" type="number" inputmode="decimal" step="any" min="0"><select class="usel" data-u="wmW" aria-label="Unit"><option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option></select></div></div>
-        <div class="field"><label for="wmH">Window height</label>
+        <div class="field"><label for="wmH" id="wmHLbl">Window height</label>
           <div class="val"><input id="wmH" type="number" inputmode="decimal" step="any" min="0"><select class="usel" data-u="wmH" aria-label="Unit"><option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option></select></div></div>
+      </div>
+      <div id="wmBothRow">
+      <label class="check"><input type="checkbox" id="wmSameSize"> Bottom window same size as top</label>
+      <div class="fields" id="wmBotRow">
+        <div class="field"><label for="wmBW">Bottom window width</label>
+          <div class="val"><input id="wmBW" type="number" inputmode="decimal" step="any" min="0"><select class="usel" data-u="wmBW" aria-label="Unit"><option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option></select></div></div>
+        <div class="field"><label for="wmBH">Bottom window height</label>
+          <div class="val"><input id="wmBH" type="number" inputmode="decimal" step="any" min="0"><select class="usel" data-u="wmBH" aria-label="Unit"><option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option></select></div></div>
+      </div>
       </div>
       <div class="tabs" role="tablist" aria-label="Along the tape" id="wmAlong">
         <button class="tab" role="tab" type="button" data-v="centre">Centred</button>
@@ -1773,7 +1784,7 @@ $('tpl').onchange = () => {
   const m = S.standards.find((x) => x.id === t.material);
   if (m) { S.presetId = m.id; store.set('cutter.preset.v2', m.id); S.work = pick(m); }
   try {
-    if (t.params) { Object.assign(W, t.params); fillMaker(); }
+    if (t.params) { Object.assign(W, { same: true }, t.params); fillMaker(); }
     loadSvgText(t.svg, t.name);
     dock(S.cutter ? 'Ready to cut' : 'Template loaded. Connect the cutter to cut.', 'good');
   } catch (e) { dock(e.message, 'bad'); }
@@ -1793,13 +1804,13 @@ $('tplDel').onclick = () => {
 // up from its bottom edge, and the window is centred in what's left above that line.
 const TAPE = 101.6, MAT = 304.8, EDGE = 10;
 const W_KEY = 'cutter.windowmaker';
-const W = Object.assign({ tape: 'top', trim: false, trimUp: 25.4, w: 110, h: 10, along: 'centre', left: 38.1, tl: 3, tr: 3, bl: 3, br: 3 }, store.get(W_KEY, {}));
-const WNUM = { wmTapeW: 'trimUp', wmW: 'w', wmH: 'h', wmLeft: 'left', wmTL: 'tl', wmTR: 'tr', wmBL: 'bl', wmBR: 'br' };
+const W = Object.assign({ tape: 'top', trim: false, trimUp: 25.4, w: 110, h: 10, same: true, bw: 110, bh: 10, along: 'centre', left: 38.1, tl: 3, tr: 3, bl: 3, br: 3 }, store.get(W_KEY, {}));
+const WNUM = { wmTapeW: 'trimUp', wmW: 'w', wmH: 'h', wmBW: 'bw', wmBH: 'bh', wmLeft: 'left', wmTL: 'tl', wmTR: 'tr', wmBL: 'bl', wmBR: 'br' };
 // Everything is kept in millimetres; these fields can be typed in mm, cm or inches, each with its own unit
 // (he gets window sizes in cm and tape widths in inches). The tape-width box shows how wide the tape is
 // left after the trim line, which is stored as trimUp: the line's distance up from the tape's bottom edge.
 const UNIT = { mm: 1, cm: 10, in: 25.4 };
-const UNITS = Object.assign({ wmTapeW: 'in', wmW: 'cm', wmH: 'cm', wmLeft: 'cm' }, store.get('cutter.windowmaker.units', {}));
+const UNITS = Object.assign({ wmTapeW: 'in', wmW: 'cm', wmH: 'cm', wmBW: 'cm', wmBH: 'cm', wmLeft: 'cm' }, store.get('cutter.windowmaker.units', {}));
 const unitOf = (id) => UNIT[UNITS[id]] || 1;
 const shown = (id) => { const mm = id === 'wmTapeW' ? TAPE - W.trimUp : W[WNUM[id]]; return +(mm / unitOf(id)).toFixed(UNITS[id] === 'mm' || !UNITS[id] ? 2 : 3); };
 const typed = (id, v) => { const mm = v * unitOf(id); return id === 'wmTapeW' ? TAPE - mm : mm; };
@@ -1813,13 +1824,25 @@ function windowPath(x, y, w, h, r) {
     + `H${f2(x + bl)}${arc(bl, x, y + h - bl)}V${f2(y + tl)}${arc(tl, x + tl, y)}Z`;
 }
 
+// With both tapes, the bottom window can be its own size (W.same off) or match the top one.
+const twoSizes = () => W.tape === 'both' && W.same === false;
+function sizeFor(tape) {
+  return tape === 'bottom' && (W.tape === 'bottom' || W.same !== false) ? { w: +W.w, h: +W.h }
+    : tape === 'bottom' ? { w: +W.bw, h: +W.bh } : { w: +W.w, h: +W.h };
+}
+
 function makerSvg() {
   const parts = [], problems = [];
-  const w = +W.w, h = +W.h;
-  if (!(w > 0 && h > 0)) return { problems: ['Enter the window width and height.'] };
-  const x = W.along === 'left' ? +W.left : (MAT - w) / 2;
-  if (x < EDGE || x + w > MAT - EDGE) problems.push('The window runs past the ends of the tape. Make it narrower or move it.');
-  for (const tape of W.tape === 'both' ? ['top', 'bottom'] : [W.tape]) {
+  const tapes = W.tape === 'both' ? ['top', 'bottom'] : [W.tape];
+  for (const tape of tapes) {
+    const { w, h } = sizeFor(tape);
+    if (!(w > 0 && h > 0)) return { problems: [twoSizes() ? `Enter the ${tape} window width and height.` : 'Enter the window width and height.'] };
+  }
+  for (const tape of tapes) {
+    const { w, h } = sizeFor(tape);
+    const which = twoSizes() ? `The ${tape} window` : 'The window';
+    const x = W.along === 'left' ? +W.left : (MAT - w) / 2;
+    if (x < EDGE || x + w > MAT - EDGE) problems.push(`${which} runs past the ends of the tape. Make it narrower or move it.`);
     const top = tape === 'top' ? 0 : MAT - TAPE;
     let bottom = top + TAPE;
     if (W.trim) {
@@ -1828,7 +1851,7 @@ function makerSvg() {
       parts.push(`<line x1="${EDGE}" y1="${f2(bottom)}" x2="${MAT - EDGE}" y2="${f2(bottom)}"/>`);
     }
     const y = (top + bottom) / 2 - h / 2;
-    if (h > bottom - top) problems.push('The window is taller than the tape' + (W.trim ? ' above the trim line.' : '.'));
+    if (h > bottom - top) problems.push(`${which} is taller than the tape` + (W.trim ? ' above the trim line.' : '.'));
     parts.push(`<path d="${windowPath(x, y, w, h, W)}"/>`);
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="304.8mm" height="304.8mm" viewBox="0 0 304.8 304.8"><g fill="none" stroke="#000" stroke-width="0.3">${parts.join('')}</g></svg>`;
@@ -1836,6 +1859,7 @@ function makerSvg() {
 }
 
 function makerName() {
+  if (twoSizes()) return `Windows ${f2(W.w)} × ${f2(W.h)} (top) and ${f2(W.bw)} × ${f2(W.bh)} mm (bottom)`;
   return `Window ${f2(W.w)} × ${f2(W.h)} mm`;
 }
 
@@ -1845,6 +1869,11 @@ function fillMaker() {
   $('wmTrim').checked = !!W.trim;
   $('wmTrimRow').hidden = !W.trim;
   $('wmLeftRow').hidden = W.along !== 'left';
+  $('wmBothRow').hidden = W.tape !== 'both';
+  $('wmSameSize').checked = W.same !== false;
+  $('wmBotRow').hidden = !twoSizes();
+  $('wmWLbl').textContent = twoSizes() ? 'Top window width' : 'Window width';
+  $('wmHLbl').textContent = twoSizes() ? 'Top window height' : 'Window height';
   for (const b of $('wmTape').children) b.setAttribute('aria-selected', String(b.dataset.v === W.tape));
   for (const b of $('wmAlong').children) b.setAttribute('aria-selected', String(b.dataset.v === W.along));
 }
@@ -1877,6 +1906,8 @@ for (const [id, k] of Object.entries(WNUM)) $(id).oninput = () => {
 // changing a unit keeps the real size and just shows it in the new unit
 for (const u of document.querySelectorAll('.usel')) u.onchange = () => { UNITS[u.dataset.u] = u.value; store.set('cutter.windowmaker.units', UNITS); fillMaker(); };
 $('wmTrim').onchange = () => { W.trim = $('wmTrim').checked; applyMaker(); };
+// unticking "same size" starts the bottom window at the top one's size, ready to change
+$('wmSameSize').onchange = () => { W.same = $('wmSameSize').checked; if (!W.same) { W.bw = W.w; W.bh = W.h; } applyMaker(); };
 for (const [box, key] of [['wmTape', 'tape'], ['wmAlong', 'along']]) {
   for (const b of $(box).children) b.onclick = () => { W[key] = b.dataset.v; applyMaker(); };
 }
